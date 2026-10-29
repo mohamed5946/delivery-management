@@ -13,9 +13,14 @@ import '../../widgets/glass.dart';
 import '../session.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.session});
+  const LoginScreen({super.key, required this.session, this.firebaseReady = true});
 
   final SessionController session;
+
+  /// False when Firebase never initialized: show a plain banner so
+  /// the user sees WHY sign-in cannot work, instead of a silent
+  /// failure (v1.0.0 froze on launch in exactly this state).
+  final bool firebaseReady;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -74,6 +79,32 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
+                  if (!widget.firebaseReady) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      key: const ValueKey('firebaseNotConfiguredBanner'),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .errorContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'لم يتم ربط Firebase بعد — مش هينفع '
+                              'تسجيل الدخول لحد ما الإعدادات '
+                              'الحقيقية تتحط في النسخة.',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 32),
                   GlassCard(
                     child: Column(

@@ -19,11 +19,22 @@ import 'widgets/shimmer_skeleton.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Only a successful initializeApp makes the real backend safe to
+  // construct: FirestoreManagerBackend's constructor reads
+  // FirebaseAuth.instance, which throws when no Firebase app exists.
+  // v1.0.0 constructed it unconditionally before runApp while init
+  // was skipped (placeholders), so the throw happened before any
+  // Flutter frame and the Android launch splash stayed forever.
+  // Never again: the real backend is constructed ONLY after init
+  // succeeds; otherwise the app runs on UnconfiguredBackend and
+  // reaches a readable login screen with a plain message.
+  bool firebaseReady = false;
   if (DefaultFirebaseOptions.isConfigured) {
     try {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+      firebaseReady = true;
     } catch (e) {
       diagnosticsLog.add('init', 'Firebase init failed: $e');
     }
@@ -38,8 +49,11 @@ Future<void> main() async {
   await settings.load();
   runApp(
     DeliveryManagementApp(
-      backend: FirestoreManagerBackend(),
+      backend: firebaseReady
+          ? FirestoreManagerBackend()
+          : const UnconfiguredBackend(),
       settings: settings,
+      firebaseReady: firebaseReady,
     ),
   );
 }
@@ -52,11 +66,16 @@ class DeliveryManagementApp extends StatefulWidget {
     required this.backend,
     required this.settings,
     this.session,
+    this.firebaseReady = true,
   });
 
   final ManagerBackend backend;
   final SettingsController settings;
   final SessionController? session;
+
+  /// False when Firebase never initialized: the app still runs, but
+  /// the login screen says plainly that sign-in cannot work yet.
+  final bool firebaseReady;
 
   @override
   State<DeliveryManagementApp> createState() =>
@@ -127,7 +146,10 @@ class _DeliveryManagementAppState extends State<DeliveryManagementApp> {
                 case SessionStatus.denied:
                 case SessionStatus.blocked:
                 case SessionStatus.mustChangePassword:
-                  return LoginScreen(session: _session);
+                  return LoginScreen(
+                    session: _session,
+                    firebaseReady: widget.firebaseReady,
+                  );
               }
             },
           ),

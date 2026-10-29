@@ -51,6 +51,151 @@ class BackendNotConfigured implements Exception {
       'في lib/data/firebase_options.dart.';
 }
 
+/// Backend used when Firebase never initialized (placeholders still
+/// in firebase_options.dart, or initializeApp threw). It NEVER touches
+/// Firebase: v1.0.0 froze on the Android launch splash exactly because
+/// main() constructed FirestoreManagerBackend() — whose constructor
+/// reads FirebaseAuth.instance — before runApp while no Firebase app
+/// existed, so the constructor threw before any Flutter frame ever
+/// rendered. main() must only construct the real backend after a
+/// successful initializeApp, and use this one otherwise, so the app
+/// always reaches a readable login screen.
+class UnconfiguredBackend implements ManagerBackend {
+  const UnconfiguredBackend();
+
+  @override
+  String? get currentUid => null;
+
+  @override
+  Future<String?> resolveEmail(String identifier) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<String> signInWithEmail(String email, String password) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<ManagerAccount?> loadAccount(String uid) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<List<ManagerAccount>> listUsers() async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<DaySummary?> fetchDaySummary(String uid, String dateKey) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<Map<String, List<DaySummary>>> listSummariesForDays(
+    List<String> dateKeys,
+  ) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<List<DaySummary>> listSummariesForUser(
+    String uid,
+    List<String> dateKeys,
+  ) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<List<Adjustment>> listAdjustments(String uid) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<DayOrderRecord?> fetchOrderRecord(String uid, String dateKey) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<void> saveDaySummary(DaySummary summary, String managerUid) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<void> saveOrderRecord(
+    String uid,
+    String dateKey,
+    DayOrderRecord record,
+    String managerUid,
+  ) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<Adjustment> addAdjustment(
+    Adjustment adjustment,
+    String managerUid,
+  ) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<void> deleteAdjustment(String uid, String adjustmentId) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<void> setRole(String uid, ManagerRole role, String managerUid) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<void> setBlocked(String uid, bool blocked, String managerUid) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
+  Stream<List<ManagerAccount>> watchUsers() {
+    return Stream.error(const BackendNotConfigured());
+  }
+
+  @override
+  Stream<List<DaySummary>> watchSummariesForDays(List<String> dateKeys) {
+    return Stream.error(const BackendNotConfigured());
+  }
+
+  @override
+  Stream<List<DaySummary>> watchSummariesForUser(
+    String uid,
+    List<String> dateKeys,
+  ) {
+    return Stream.error(const BackendNotConfigured());
+  }
+
+  @override
+  Stream<List<Adjustment>> watchAdjustments(String uid) {
+    return Stream.error(const BackendNotConfigured());
+  }
+
+  @override
+  Stream<DayOrderRecord?> watchOrderRecord(String uid, String dateKey) {
+    return Stream.error(const BackendNotConfigured());
+  }
+
+  @override
+  Stream<ManagerAccount?> watchAccount(String uid) {
+    return Stream.error(const BackendNotConfigured());
+  }
+}
+
 class BackendAuthFailed implements Exception {
   const BackendAuthFailed([this.message = 'بيانات الدخول غير صحيحة.']);
   final String message;
