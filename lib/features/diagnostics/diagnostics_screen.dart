@@ -6,21 +6,27 @@
 import 'package:flutter/material.dart';
 
 import '../../core/diagnostics.dart';
+import '../../core/strings.dart';
+import '../../theme/dm_theme.dart';
 import '../../widgets/glass.dart';
 
 class DiagnosticsScreen extends StatelessWidget {
   const DiagnosticsScreen({super.key});
 
   @override
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final s = DmStrings.of(context);
+    // DmPage: see TeamScreen — pushed routes need the aurora behind
+    // the page itself or they render black.
+    return DmPage(
       appBar: AppBar(
-        title: const Text('سجل التشخيص'),
+        title: Text(s.diagnosticsTitle),
         actions: [
           IconButton(
             key: const ValueKey('diagnosticsClear'),
             icon: const Icon(Icons.delete_rounded),
-            tooltip: 'مسح السجل',
+            tooltip: s.clearLog,
             onPressed: diagnosticsLog.clear,
           ),
         ],
@@ -30,12 +36,11 @@ class DiagnosticsScreen extends StatelessWidget {
         builder: (context, _, __) {
           final entries = diagnosticsLog.entries;
           if (entries.isEmpty) {
-            return const Padding(
+            return Padding(
               padding: GlassTokens.screenPadding,
               child: GlassCard(
                 child: Text(
-                  'السجل فاضي — مفيش أخطاء ولا أحداث متسجلة '
-                  'من ساعة ما فتحت التطبيق.',
+                  s.logEmpty,
                 ),
               ),
             );

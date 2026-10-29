@@ -51,37 +51,6 @@ List<String> weekDateKeys(DateTime date) {
   ];
 }
 
-/// Human label for a dateKey (e.g. "الخميس 29 أكتوبر") — weekday
-/// names in Arabic, no dependency on intl.
-String arabicDayLabel(String key) {
-  const weekdays = [
-    'الاثنين',
-    'الثلاثاء',
-    'الأربعاء',
-    'الخميس',
-    'الجمعة',
-    'السبت',
-    'الأحد',
-  ];
-  const months = [
-    'يناير',
-    'فبراير',
-    'مارس',
-    'أبريل',
-    'مايو',
-    'يونيو',
-    'يوليو',
-    'أغسطس',
-    'سبتمبر',
-    'أكتوبر',
-    'نوفمبر',
-    'ديسمبر',
-  ];
-  final d = parseDateKey(key);
-  final wd = weekdays[d.weekday - 1];
-  return '$wd ${d.day} ${months[d.month - 1]}';
-}
-
 /// dateKey for a [DateTime] built from epoch millis (local timezone).
 String dateKeyOfMillis(int millis) =>
     dateKey(DateTime.fromMillisecondsSinceEpoch(millis));

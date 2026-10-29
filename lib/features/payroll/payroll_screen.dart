@@ -9,9 +9,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/diagnostics.dart';
+import '../../core/strings.dart';
 import '../../core/week_utils.dart';
 import '../../data/backend.dart';
 import '../../data/models.dart';
+import '../../theme/dm_theme.dart';
 import '../../widgets/glass.dart';
 import '../../widgets/shimmer_skeleton.dart';
 
@@ -173,8 +175,8 @@ class _PayrollScreenState extends State<PayrollScreen> {
     }
     if (!mounted) return;
     setState(() {
-      _liveError = 'الاتصال المباشر وقف (summaries): $e'
-          '${fetchError != null ? '\nتعذر الجلب الاحتياطي: $fetchError' : ''}';
+      _liveError = DmStrings.of(context).liveStopped('summaries', e) +
+          (fetchError != null ? DmStrings.of(context).fallbackFailed(fetchError) : '');
       if (fetched != null) {
         _summariesFallback = true;
         _week = fetched;
@@ -197,8 +199,8 @@ class _PayrollScreenState extends State<PayrollScreen> {
     }
     if (!mounted) return;
     setState(() {
-      _liveError = 'الاتصال المباشر وقف (users): $e'
-          '${fetchError != null ? '\nتعذر الجلب الاحتياطي: $fetchError' : ''}';
+      _liveError = DmStrings.of(context).liveStopped('users', e) +
+          (fetchError != null ? DmStrings.of(context).fallbackFailed(fetchError) : '');
       if (fetched != null) {
         final visible = visibleTeamUsers(fetched);
         _users = visible;
@@ -235,6 +237,10 @@ class _PayrollScreenState extends State<PayrollScreen> {
     final keys = weekDateKeys(_weekStart);
     final out = <_PayrollRowData>[];
     for (final user in _users) {
+      // Payroll is for drivers only: manager accounts (e.g. the admin
+      // account mirroring a driver's data) never appear here. The
+      // Team roster still lists everyone.
+      if (user.isManager) continue;
       final summaries = keys
           .map((k) => _week[k] ?? const <DaySummary>[])
           .expand((list) => list)
@@ -260,7 +266,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
     diagnosticsLog.add('live', 'payroll $what stream error: $e');
     if (!mounted) return;
     setState(
-      () => _liveError = 'الاتصال المباشر وقف ($what): $e',
+      () => _liveError = DmStrings.of(context).liveStopped(what, e),
     );
   }
 
@@ -281,9 +287,10 @@ class _PayrollScreenState extends State<PayrollScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = DmStrings.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الأجور الأسبوعية'),
+        title: Text(s.payrollTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -300,12 +307,14 @@ class _PayrollScreenState extends State<PayrollScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.chevron_right_rounded),
+                    icon: Icon(s.isArabic
+                        ? Icons.chevron_right_rounded
+                        : Icons.chevron_left_rounded),
                     onPressed: () => _shiftWeek(-1),
                   ),
                   Expanded(
                     child: Text(
-                      'أسبوع ${arabicDayLabel(_weekKey)}',
+                      s.weekOf(s.dayLabel(_weekKey)),
                       textAlign: TextAlign.center,
                       style: Theme.of(context)
                           .textTheme
@@ -314,7 +323,9 @@ class _PayrollScreenState extends State<PayrollScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.chevron_left_rounded),
+                    icon: Icon(s.isArabic
+                        ? Icons.chevron_left_rounded
+                        : Icons.chevron_right_rounded),
                     onPressed: () => _shiftWeek(1),
                   ),
                 ],
@@ -329,15 +340,12 @@ class _PayrollScreenState extends State<PayrollScreen> {
                     Text(_liveError!),
                     if (_summariesFallback) ...[
                       const SizedBox(height: 4),
-                      const Text(
-                        'البيانات المعروضة من جلب لمرة واحدة — '
-                        'اضغط إعادة الاتصال لاستعادة المباشر.',
-                      ),
+                      Text(s.fallbackNote),
                     ],
                     const SizedBox(height: 12),
                     FilledButton(
                       onPressed: _refresh,
-                      child: const Text('إعادة الاتصال'),
+                      child: Text(s.reconnect),
                     ),
                   ],
                 ),
@@ -345,8 +353,8 @@ class _PayrollScreenState extends State<PayrollScreen> {
             if (!(_usersLoaded && _summariesLoaded))
               const ListSkeleton()
             else if (_rows.isEmpty)
-              const GlassCard(
-                child: Text('مفيش أعضاء فريق لعرض أجورهم.'),
+              GlassCard(
+                child: Text(s.noTeamForPayroll),
               )
             else
               Column(
@@ -378,14 +386,13 @@ class _PayrollScreenState extends State<PayrollScreen> {
                                         Theme.of(context).textTheme.titleSmall,
                                   ),
                                   Text(
-                                    'طريقة القبض: '
-                                    '${row.account.payoutMethod.labelAr}',
+                                    s.payoutMethodLine(row.account.payoutMethod.labelFor(s)),
                                     style:
                                         Theme.of(context).textTheme.bodySmall,
                                   ),
                                   if (row.payout.totalBonus > 0)
                                     Text(
-                                      'بونص: +${egp(row.payout.totalBonus)}',
+                                      s.bonusLine(egp(row.payout.totalBonus, s)),
                                       style: TextStyle(
                                         color: Theme.of(context)
                                             .colorScheme
@@ -395,7 +402,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
                                     ),
                                   if (row.payout.deduction > 0)
                                     Text(
-                                      'خصم: −${egp(row.payout.deduction)}',
+                                      s.deductionLine(egp(row.payout.deduction, s)),
                                       style: TextStyle(
                                         color:
                                             Theme.of(context).colorScheme.error,
@@ -406,7 +413,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
                               ),
                             ),
                             Text(
-                              egp(row.payout.net),
+                              egp(row.payout.net, s),
                               style: Theme.of(context)
                                   .textTheme
                                   .titleMedium
@@ -517,8 +524,7 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
     diagnosticsLog.add('live', 'payout detail $what stream error: $e');
     if (!mounted) return;
     setState(
-      () => _liveError =
-          'الاتصال المباشر وقف ($what). اضغط تحديث لإعادة الاتصال.',
+      () => _liveError = DmStrings.of(context).liveStoppedGeneric,
     );
   }
 
@@ -533,9 +539,13 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
     final weekKey = dateKey(widget.weekStart);
     final keys = weekDateKeys(widget.weekStart);
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    final s = DmStrings.of(context);
+    // DmPage (aurora behind the page): pushed routes are opaque, so
+    // a bare transparent Scaffold renders black (the v1.0.2 field
+    // bug) — the aurora must be painted behind this page itself.
+    return DmPage(
       appBar: AppBar(
-        title: Text('قبض ${account.displayName}'),
+        title: Text(s.payoutTitle(account.displayName)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -556,7 +566,7 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                     const SizedBox(height: 12),
                     FilledButton(
                       onPressed: _refresh,
-                      child: const Text('إعادة الاتصال'),
+                      child: Text(s.reconnect),
                     ),
                   ],
                 ),
@@ -603,21 +613,21 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                         account.displayName,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      Text('أسبوع ${arabicDayLabel(weekKey)}'),
+                      Text(s.weekOf(s.dayLabel(weekKey))),
                       const SizedBox(height: 8),
                       InfoRow(
                         icon: Icons.payments_rounded,
-                        label: 'طريقة القبض',
-                        value: account.payoutMethod.labelAr,
+                        label: s.payoutMethodLabel,
+                        value: account.payoutMethod.labelFor(s),
                       ),
                       InfoRow(
                         icon: Icons.phone_rounded,
-                        label: 'رقم التحويل',
+                        label: s.transferNumberLabel,
                         value: account.payoutNumber,
                       ),
                       InfoRow(
                         icon: Icons.account_balance_wallet_rounded,
-                        label: 'اسم المحفظة',
+                        label: s.walletNameLabel,
                         value: account.payoutName,
                       ),
                     ],
@@ -629,27 +639,27 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'المستحق',
+                        s.dueTitle,
                         style: Theme.of(context)
                             .textTheme
                             .titleSmall
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 8),
-                      Text('مجاميع الأيام: ${egp(payout.base)}'),
+                      Text(s.dayTotals(egp(payout.base, s))),
                       if (payout.bonus > 0)
                         Text(
-                          'بونص (تعديلات): +${egp(payout.bonus)}',
+                          s.bonusAdjustments(egp(payout.bonus, s)),
                           style: TextStyle(color: scheme.primary),
                         ),
                       if (payout.deduction > 0)
                         Text(
-                          'خصومات (تعديلات): −${egp(payout.deduction)}',
+                          s.deductionAdjustments(egp(payout.deduction, s)),
                           style: TextStyle(color: scheme.error),
                         ),
                       const Divider(),
                       Text(
-                        egp(payout.net),
+                        egp(payout.net, s),
                         style: Theme.of(context)
                             .textTheme
                             .titleMedium
@@ -682,7 +692,7 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      arabicDayLabel(dayKey),
+                                      s.dayLabel(dayKey),
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleSmall,
@@ -690,8 +700,8 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                                   ),
                                   Text(
                                     summary == null
-                                        ? 'مفيش بيانات'
-                                        : egp(summary.salaryTotal),
+                                        ? s.noData
+                                        : egp(summary.salaryTotal, s),
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleSmall
@@ -707,7 +717,7 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                                   children: [
                                     if (hasBonus)
                                       Text(
-                                        'بونص',
+                                        s.bonusWord,
                                         style: TextStyle(
                                           color: scheme.primary,
                                           fontWeight: FontWeight.w700,
@@ -717,7 +727,7 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                                       const SizedBox(width: 12),
                                     if (hasDeduction)
                                       Text(
-                                        'خصم',
+                                        s.deductionWord,
                                         style: TextStyle(
                                           color: scheme.error,
                                           fontWeight: FontWeight.w700,
@@ -734,6 +744,7 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                                     Text(
                                       signedEgp(
                                         a.amount,
+                                        s,
                                         isBonus: a.isBonus,
                                       ),
                                       style: TextStyle(
@@ -759,15 +770,14 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'تعديلات تانية لنفس الأسبوع',
+                          s.otherWeekAdjustments,
                           style: Theme.of(context)
                               .textTheme
                               .titleSmall
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
-                        const Text(
-                          'محسوبة في المجموع، لكن اتعملت في يوم '
-                          'بره الأسبوع.',
+                        Text(
+                          s.otherWeekAdjustmentsNote,
                           style: TextStyle(fontSize: 13),
                         ),
                         const SizedBox(height: 8),
@@ -776,7 +786,7 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                             children: [
                               Expanded(child: Text(a.reason)),
                               Text(
-                                signedEgp(a.amount, isBonus: a.isBonus),
+                                signedEgp(a.amount, s, isBonus: a.isBonus),
                                 style: TextStyle(
                                   color:
                                       a.isBonus ? scheme.primary : scheme.error,

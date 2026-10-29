@@ -18,6 +18,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/diagnostics.dart';
+import '../../core/strings.dart';
 import '../../data/backend.dart';
 import '../../data/models.dart';
 import '../../widgets/confirm.dart';
@@ -90,7 +91,7 @@ class _ApplicationScreenState extends State<ApplicationScreen> {
     final settings = widget.settings;
     final account = _account ?? session.account!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Application')),
+      appBar: AppBar(title: Text(DmStrings.of(context).applicationTitle)),
       body: SingleChildScrollView(
         padding: GlassTokens.screenPadding,
         child: Column(
@@ -129,7 +130,7 @@ class _ApplicationScreenState extends State<ApplicationScreen> {
                                   .titleLarge
                                   ?.copyWith(fontWeight: FontWeight.w800),
                             ),
-                            const Text('مدير • مسجل دخول'),
+                            Text(DmStrings.of(context).managerSignedIn),
                           ],
                         ),
                       ),
@@ -138,17 +139,17 @@ class _ApplicationScreenState extends State<ApplicationScreen> {
                   const SizedBox(height: 12),
                   InfoRow(
                     icon: Icons.person_rounded,
-                    label: 'اسم المستخدم',
+                    label: DmStrings.of(context).usernameLabel,
                     value: account.username,
                   ),
                   InfoRow(
                     icon: Icons.phone_rounded,
-                    label: 'التليفون',
+                    label: DmStrings.of(context).phoneLabel,
                     value: account.phone,
                   ),
                   InfoRow(
                     icon: Icons.email_rounded,
-                    label: 'الإيميل',
+                    label: DmStrings.of(context).emailLabel,
                     value: account.email,
                   ),
                 ],
@@ -184,24 +185,26 @@ class _ApplicationScreenState extends State<ApplicationScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'فريق العمل',
+                          DmStrings.of(context).teamTitle,
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 17,
                           ),
                         ),
                         Text(
-                          'كل الناس اللي شغالة معانا — سواقين ومديرين',
+                          DmStrings.of(context).teamEntrySubtitle,
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_left_rounded),
+                  Icon(DmStrings.of(context).isArabic
+                      ? Icons.chevron_left_rounded
+                      : Icons.chevron_right_rounded),
                 ],
               ),
             ),
@@ -213,7 +216,7 @@ class _ApplicationScreenState extends State<ApplicationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'إعدادات التطبيق',
+                    DmStrings.of(context).appSettingsTitle,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
@@ -222,25 +225,56 @@ class _ApplicationScreenState extends State<ApplicationScreen> {
                   ListenableBuilder(
                     listenable: settings,
                     builder: (context, _) {
-                      return SegmentedButton<ThemeMode>(
-                        segments: const [
-                          ButtonSegment(
-                            value: ThemeMode.system,
-                            label: Text('تلقائي'),
+                      final s = DmStrings.of(context);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SegmentedButton<ThemeMode>(
+                            segments: [
+                              ButtonSegment(
+                                value: ThemeMode.system,
+                                label: Text(s.themeAuto),
+                              ),
+                              ButtonSegment(
+                                value: ThemeMode.light,
+                                label: Text(s.themeLight),
+                              ),
+                              ButtonSegment(
+                                value: ThemeMode.dark,
+                                label: Text(s.themeDark),
+                              ),
+                            ],
+                            selected: {settings.themeMode},
+                            onSelectionChanged: (modes) {
+                              settings.setThemeMode(modes.first);
+                            },
                           ),
-                          ButtonSegment(
-                            value: ThemeMode.light,
-                            label: Text('فاتح'),
+                          const SizedBox(height: 12),
+                          Text(
+                            s.languageTitle,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
-                          ButtonSegment(
-                            value: ThemeMode.dark,
-                            label: Text('داكن'),
+                          const SizedBox(height: 8),
+                          SegmentedButton<Locale>(
+                            segments: [
+                              ButtonSegment(
+                                value: const Locale('ar'),
+                                label: Text(s.languageArabic),
+                              ),
+                              ButtonSegment(
+                                value: const Locale('en'),
+                                label: Text(s.languageEnglish),
+                              ),
+                            ],
+                            selected: {settings.locale},
+                            onSelectionChanged: (locales) {
+                              settings.setLocale(locales.first);
+                            },
                           ),
                         ],
-                        selected: {settings.themeMode},
-                        onSelectionChanged: (modes) {
-                          settings.setThemeMode(modes.first);
-                        },
                       );
                     },
                   ),
@@ -255,7 +289,7 @@ class _ApplicationScreenState extends State<ApplicationScreen> {
                         ),
                       );
                     },
-                    child: const Row(
+                    child: Row(
                       children: [
                         Icon(Icons.bug_report_rounded),
                         SizedBox(width: 12),
@@ -263,9 +297,9 @@ class _ApplicationScreenState extends State<ApplicationScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('سجل التشخيص'),
+                              Text(DmStrings.of(context).diagnosticsTitle),
                               Text(
-                                'كل الأحداث والأخطاء بأسبابها الحقيقية',
+                                DmStrings.of(context).diagnosticsSubtitle,
                               ),
                             ],
                           ),
@@ -282,14 +316,13 @@ class _ApplicationScreenState extends State<ApplicationScreen> {
             OutlinedButton.icon(
               key: const ValueKey('applicationSignOut'),
               icon: const Icon(Icons.logout_rounded),
-              label: const Text('تسجيل الخروج'),
+              label: Text(DmStrings.of(context).signOut),
               onPressed: () async {
                 final confirmed = await showConfirmDialog(
                   context: context,
-                  title: 'تسجيل الخروج؟',
-                  body: 'هتخرج من حساب المدير، وهتحتاج تسجل '
-                      'دخول تاني عشان ترجع.',
-                  confirmLabel: 'تسجيل الخروج',
+                  title: DmStrings.of(context).signOutQ,
+                  body: DmStrings.of(context).signOutBody,
+                  confirmLabel: DmStrings.of(context).signOut,
                   destructive: false,
                 );
                 if (confirmed && context.mounted) {
@@ -333,16 +366,17 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
     final current = _current.text;
     final next = _next.text;
     final confirm = _confirm.text;
+    final s = DmStrings.of(context);
     if (current.isEmpty || next.isEmpty) {
-      setState(() => _error = 'املأ كل الحقول.');
+      setState(() => _error = s.fillAllFields);
       return;
     }
     if (next.length < 6) {
-      setState(() => _error = 'كلمة المرور الجديدة لازم 6 حروف على الأقل.');
+      setState(() => _error = s.passwordMinLength);
       return;
     }
     if (next != confirm) {
-      setState(() => _error = 'كلمة المرور الجديدة مش مطابقة للتأكيد.');
+      setState(() => _error = s.passwordMismatch);
       return;
     }
     setState(() {
@@ -355,7 +389,7 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
       await widget.session.refreshAccount();
       if (!mounted) return;
       setState(() {
-        _done = 'تم تغيير كلمة المرور.';
+        _done = DmStrings.of(context).passwordChanged;
         _current.clear();
         _next.clear();
         _confirm.clear();
@@ -370,12 +404,13 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
 
   @override
   Widget build(BuildContext context) {
+    final s = DmStrings.of(context);
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'تغيير كلمة المرور',
+            s.changePasswordTitle,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -384,8 +419,8 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
           TextField(
             controller: _current,
             obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'كلمة المرور الحالية',
+            decoration: InputDecoration(
+              labelText: s.currentPasswordLabel,
               border: OutlineInputBorder(),
             ),
           ),
@@ -393,8 +428,8 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
           TextField(
             controller: _next,
             obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'كلمة المرور الجديدة',
+            decoration: InputDecoration(
+              labelText: s.newPasswordLabel,
               border: OutlineInputBorder(),
             ),
           ),
@@ -402,15 +437,15 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
           TextField(
             controller: _confirm,
             obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'تأكيد كلمة المرور الجديدة',
+            decoration: InputDecoration(
+              labelText: s.confirmPasswordLabel,
               border: OutlineInputBorder(),
             ),
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
             Text(
-              _error!,
+              s.localizeError(_error!),
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ],
@@ -433,7 +468,7 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
                       color: Colors.white,
                     ),
                   )
-                : const Text('تغيير كلمة المرور'),
+                : Text(s.changePasswordTitle),
           ),
         ],
       ),
@@ -467,7 +502,7 @@ class _HelpSupportSection extends StatelessWidget {
     await Clipboard.setData(const ClipboardData(text: _supportEmail));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم نسخ الإيميل')),
+      SnackBar(content: Text(DmStrings.of(context).emailCopied)),
     );
   }
 
@@ -485,7 +520,7 @@ class _HelpSupportSection extends StatelessWidget {
     await Clipboard.setData(const ClipboardData(text: _portfolioUrl));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم نسخ الرابط')),
+      SnackBar(content: Text(DmStrings.of(context).linkCopied)),
     );
   }
 
@@ -496,7 +531,7 @@ class _HelpSupportSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'المساعدة والدعم',
+            DmStrings.of(context).helpSupportTitle,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -507,42 +542,42 @@ class _HelpSupportSection extends StatelessWidget {
             builder: (context, snap) {
               return InfoRow(
                 icon: Icons.info_rounded,
-                label: 'عن التطبيق',
+                label: DmStrings.of(context).aboutApp,
                 value: snap.data ?? _fallbackVersion,
               );
             },
           ),
           const SizedBox(height: 4),
-          const InfoRow(
+          InfoRow(
             icon: Icons.brush_rounded,
-            label: 'تصميم',
+            label: DmStrings.of(context).designedBy,
             value: 'eng/Mohamed El Sayed',
           ),
           const SizedBox(height: 4),
           InfoRow(
             icon: Icons.email_rounded,
-            label: 'الإيميل',
+            label: DmStrings.of(context).emailLabel,
             value: _supportEmail,
             onTap: () => _openMail(context),
           ),
           const SizedBox(height: 4),
-          const InfoRow(
+          InfoRow(
             icon: Icons.phone_rounded,
-            label: 'التواصل',
+            label: DmStrings.of(context).contactLabel,
             value: _contactNumber,
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
             key: const ValueKey('helpCallUs'),
             icon: const Icon(Icons.call_rounded),
-            label: const Text('اتصل بنا'),
+            label: Text(DmStrings.of(context).callUs),
             onPressed: () => launchUrl(Uri.parse('tel:$_contactNumber')),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             key: const ValueKey('helpPortfolio'),
             icon: const Icon(Icons.language_rounded),
-            label: const Text('الموقع الشخصي'),
+            label: Text(DmStrings.of(context).personalWebsite),
             onPressed: () => _openPortfolio(context),
           ),
         ],

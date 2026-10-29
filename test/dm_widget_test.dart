@@ -17,6 +17,7 @@ import 'package:deliverymanagement/features/settings.dart';
 import 'package:deliverymanagement/features/team/team_screen.dart';
 import 'package:deliverymanagement/main.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -185,11 +186,10 @@ void main() {
       (tester) async {
     await pumpApp(tester, seededBackend());
     await loginAs(tester, identifier: 'admin', password: 'manager123');
-    expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.text('لوحة التحكم'), findsWidgets);
     expect(find.text('الأجور الأسبوعية'), findsOneWidget);
     expect(find.text('Application'), findsOneWidget);
-    expect(find.text('Block'), findsOneWidget);
-    expect(find.text('لوحة التحكم'), findsOneWidget);
+    expect(find.text('محظور'), findsOneWidget);
   });
 
   testWidgets('manager login by phone reaches the shell', (tester) async {
@@ -199,7 +199,7 @@ void main() {
       identifier: '01000000001',
       password: 'manager123',
     );
-    expect(find.text('لوحة التحكم'), findsOneWidget);
+    expect(find.text('لوحة التحكم'), findsWidgets);
   });
 
   testWidgets('driver login is refused with managers-only message',
@@ -270,7 +270,7 @@ void main() {
       (tester) async {
     await pumpApp(tester, seededBackend());
     await loginAs(tester, identifier: 'admin', password: 'manager123');
-    await tester.tap(find.text('Block'));
+    await tester.tap(find.text('محظور'));
     await tester.pump();
     await tester.pumpAndSettle(const Duration(seconds: 3));
     expect(find.text('blocked1'), findsOneWidget);
@@ -325,6 +325,13 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('ar'), Locale('en')],
         home: TeamScreen(backend: backend, managerUid: 'm1'),
       ),
     );
@@ -353,6 +360,13 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('ar'), Locale('en')],
         home: DashboardScreen(backend: backend, session: session),
       ),
     );
@@ -388,6 +402,13 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('ar'), Locale('en')],
         home: BlockScreen(backend: backend, managerUid: 'm1'),
       ),
     );

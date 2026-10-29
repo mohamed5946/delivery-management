@@ -18,6 +18,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/diagnostics.dart';
+import '../core/strings.dart';
 import '../data/backend.dart';
 import '../data/models.dart';
 
@@ -34,6 +35,12 @@ class SessionController extends ChangeNotifier {
   SessionController(this._backend);
 
   final ManagerBackend _backend;
+
+  /// Strings for user-facing session messages. Main sets this from
+  /// the settings locale on every build; default Arabic keeps tests
+  /// and bare controllers on the current language.
+  DmStrings strings = DmStrings.arabic;
+
   SessionStatus status = SessionStatus.loading;
   ManagerAccount? account;
   String message = '';
@@ -55,7 +62,7 @@ class SessionController extends ChangeNotifier {
     } catch (e) {
       diagnosticsLog.add('session', 'restore failed: $e');
       status = SessionStatus.signedOut;
-      message = 'تعذر استعادة الجلسة. سجّل دخولك من جديد.';
+      message = strings.restoreFailed;
       notifyListeners();
     }
   }
@@ -69,7 +76,7 @@ class SessionController extends ChangeNotifier {
       final email = await _backend.resolveEmail(identifier);
       if (email == null) {
         status = SessionStatus.denied;
-        message = 'لا يوجد حساب بهذا الاسم أو الرقم.';
+        message = strings.noAccountForIdentifier;
         notifyListeners();
         return;
       }
@@ -77,16 +84,16 @@ class SessionController extends ChangeNotifier {
       await _enter(uid);
     } on BackendNotConfigured {
       status = SessionStatus.denied;
-      message = const BackendNotConfigured().toString();
+      message = strings.notConfiguredMessage;
       notifyListeners();
     } on BackendAuthFailed {
       status = SessionStatus.denied;
-      message = 'بيانات الدخول غير صحيحة.';
+      message = strings.invalidCredentials;
       notifyListeners();
     } catch (e) {
       diagnosticsLog.add('session', 'signIn failed: $e');
       status = SessionStatus.denied;
-      message = 'تعذر تسجيل الدخول: $e';
+      message = strings.signInFailed(e);
       notifyListeners();
     }
   }
@@ -101,22 +108,21 @@ class SessionController extends ChangeNotifier {
         await _backend.signOut();
         account = null;
         status = SessionStatus.blocked;
-        message = 'هذا الحساب محظور. تواصل مع مدير آخر.';
+        message = strings.accountBlocked;
       case GateDecision.mustChangePassword:
         account = loaded;
         status = SessionStatus.mustChangePassword;
-        message = 'لازم تغيّر كلمة المرور الأول من تطبيق DeliveryFlow، '
-            'وبعدها ادخل هنا تاني.';
+        message = strings.mustChangePasswordNote;
       case GateDecision.notManager:
         await _backend.signOut();
         account = null;
         status = SessionStatus.denied;
-        message = 'هذا التطبيق للمديرين فقط.';
+        message = strings.managersOnlyApp;
       case GateDecision.noAccount:
         await _backend.signOut();
         account = null;
         status = SessionStatus.denied;
-        message = 'لا يوجد ملف حساب لهذا المستخدم.';
+        message = strings.noProfileDoc;
     }
     notifyListeners();
   }

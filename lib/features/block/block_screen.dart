@@ -9,10 +9,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/diagnostics.dart';
+import '../../core/strings.dart';
 import '../../core/week_utils.dart';
 import '../../data/backend.dart';
 import '../../data/models.dart';
 import '../../widgets/confirm.dart';
+import '../../theme/dm_theme.dart';
 import '../../widgets/glass.dart';
 import '../../widgets/shimmer_skeleton.dart';
 
@@ -66,8 +68,7 @@ class _BlockScreenState extends State<BlockScreen> {
         diagnosticsLog.add('live', 'block stream error: $e');
         if (!mounted) return;
         setState(
-          () => _liveError =
-              'الاتصال المباشر وقف. اضغط تحديث لإعادة الاتصال.',
+          () => _liveError = DmStrings.of(context).liveStoppedGeneric,
         );
       },
     );
@@ -80,9 +81,10 @@ class _BlockScreenState extends State<BlockScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = DmStrings.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Block'),
+        title: Text(s.blockTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -104,7 +106,7 @@ class _BlockScreenState extends State<BlockScreen> {
                     const SizedBox(height: 12),
                     FilledButton(
                       onPressed: _refresh,
-                      child: const Text('إعادة الاتصال'),
+                      child: Text(s.reconnect),
                     ),
                   ],
                 ),
@@ -112,8 +114,8 @@ class _BlockScreenState extends State<BlockScreen> {
             if (!_loaded)
               const ListSkeleton()
             else if (_users.isEmpty)
-              const GlassCard(
-                child: Text('مفيش حد محظور حاليًا.'),
+              GlassCard(
+                child: Text(s.noBlockedNow),
               )
             else
               Column(
@@ -159,8 +161,8 @@ class _BlockScreenState extends State<BlockScreen> {
                                   ),
                                   Text(
                                     user.blockedAt > 0
-                                        ? 'محظور يوم ${arabicDayLabel(dateKeyOfMillis(user.blockedAt))}'
-                                        : 'محظور',
+                                        ? s.blockedDay(s.dayLabel(dateKeyOfMillis(user.blockedAt)))
+                                        : s.blockedLabel,
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall,
@@ -195,7 +197,10 @@ class BlockedDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final s = DmStrings.of(context);
+    // DmPage: see TeamScreen — pushed routes need the aurora behind
+    // the page itself or they render black.
+    return DmPage(
       appBar: AppBar(title: Text(account.displayName)),
       body: SingleChildScrollView(
         padding: GlassTokens.screenPadding,
@@ -215,23 +220,22 @@ class BlockedDetailScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   InfoRow(
                     icon: Icons.phone_rounded,
-                    label: 'التليفون',
+                    label: s.phoneLabel,
                     value: account.phone,
                   ),
                   InfoRow(
                     icon: Icons.email_rounded,
-                    label: 'الإيميل',
+                    label: s.emailLabel,
                     value: account.email,
                   ),
                   Text(
                     account.blockedAt > 0
-                        ? 'محظور يوم ${arabicDayLabel(dateKeyOfMillis(account.blockedAt))}'
-                        : 'محظور',
+                        ? s.blockedDay(s.dayLabel(dateKeyOfMillis(account.blockedAt)))
+                        : s.blockedLabel,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'داتاه كلها محفوظة — فك الحظر بيرجّعه كامل، '
-                    'بنفس الأوردرات والأجور والتعديلات.',
+                  Text(
+                    s.blockDataKept,
                   ),
                 ],
               ),
@@ -242,10 +246,9 @@ class BlockedDetailScreen extends StatelessWidget {
               onPressed: () async {
                 final confirmed = await showConfirmDialog(
                   context: context,
-                  title: 'فك حظر ${account.displayName}؟',
-                  body: 'هيرجع يسجل دخول بداتاه كاملة، ويرجع '
-                      'يظهر في الفريق والأجور.',
-                  confirmLabel: 'فك الحظر',
+                  title: s.unblockTitle(account.displayName),
+                  body: s.unblockDetailBody,
+                  confirmLabel: s.unblockAction,
                   destructive: false,
                 );
                 if (!confirmed || !context.mounted) return;
@@ -259,12 +262,12 @@ class BlockedDetailScreen extends StatelessWidget {
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('فشل: $e')),
+                      SnackBar(content: Text(s.failed(s.localizeError(e)))),
                     );
                   }
                 }
               },
-              child: const Text('فك الحظر'),
+              child: Text(s.unblockAction),
             ),
           ],
         ),

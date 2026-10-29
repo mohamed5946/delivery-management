@@ -9,6 +9,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../core/strings.dart';
 import '../../widgets/glass.dart';
 import '../session.dart';
 
@@ -49,6 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
+    final s = DmStrings.of(context);
     return ListenableBuilder(
       listenable: session,
       builder: (context, _) {
@@ -75,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'تطبيق المديرين — نفس بيانات DeliveryFlow',
+                    s.loginSubtitle,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -90,15 +92,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             .errorContainer,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
                           Icon(Icons.warning_amber_rounded),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'لم يتم ربط Firebase بعد — مش هينفع '
-                              'تسجيل الدخول لحد ما الإعدادات '
-                              'الحقيقية تتحط في النسخة.',
+                              s.firebaseNotReady,
                             ),
                           ),
                         ],
@@ -114,8 +114,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           key: const ValueKey('loginIdentifier'),
                           controller: _idController,
                           textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'اسم المستخدم أو رقم التليفون',
+                          decoration: InputDecoration(
+                            labelText: s.identifierLabel,
                             prefixIcon: Icon(Icons.person_rounded),
                             border: OutlineInputBorder(),
                           ),
@@ -128,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           obscureText: _obscure,
                           textInputAction: TextInputAction.done,
                           decoration: InputDecoration(
-                            labelText: 'كلمة المرور',
+                            labelText: s.passwordLabel,
                             prefixIcon: const Icon(Icons.lock_rounded),
                             border: const OutlineInputBorder(),
                             suffixIcon: IconButton(
@@ -156,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Text('دخول'),
+                              : Text(s.signInAction),
                         ),
                         if (session.status == SessionStatus.denied ||
                             session.status == SessionStatus.blocked ||
@@ -176,9 +176,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'الحسابات بتتعمل من DeliveryFlow وبتترقى لمدير '
-                    'من هناك. مفيش إنشاء حساب من هنا.',
+                  Text(
+                    s.noSignupNote,
                     textAlign: TextAlign.center,
                   ),
                 ],

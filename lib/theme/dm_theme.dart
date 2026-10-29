@@ -263,6 +263,39 @@ class DmAuroraBackground extends StatelessWidget {
   }
 }
 
+/// A full pushed page with DeliveryFlow's aurora behind it.
+///
+/// Root cause of the v1.0.2 field bug (detail screens rendering
+/// black while tabs render light): pushed routes are opaque, so a
+/// transparent Scaffold on a pushed route paints over nothing and
+/// reads as black — the tab shell looks light only because the home
+/// Stack paints the aurora behind it. Every pushed screen must use
+/// this wrapper so the aurora is painted behind the page itself.
+class DmPage extends StatelessWidget {
+  const DmPage({
+    super.key,
+    required this.appBar,
+    required this.body,
+  });
+
+  final PreferredSizeWidget? appBar;
+  final Widget body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        const DmAuroraBackground(),
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: appBar,
+          body: body,
+        ),
+      ],
+    );
+  }
+}
+
 /// DeliveryFlow's floating glass nav bar (GlassNavBar, without the
 /// liquid-glass trial overlay): a blurred translucent pill floating
 /// above the content, with a gradient pill on the selected item.

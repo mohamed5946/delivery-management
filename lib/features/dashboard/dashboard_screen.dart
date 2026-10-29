@@ -5,18 +5,25 @@
 //     ~1.3s, never an instant jump);
 //   * the week chart columns RISE UPWARD from the baseline,
 //     staggered bar by bar, smooth and weighted;
-//   * cards fade/slide in with a light stagger.
+//   * every card SLIDES UP from below (DeliveryFlow's staggered
+//     entrance: 80ms stagger, capped, 300ms, easeOut) on EVERY
+//     entry to the dashboard, driven by the shell's entry
+//     generation — data refreshes never re-trigger it.
 // Weighted, smooth, subtle — nothing pops in suddenly. The motion
 // is the same luxury language as DeliveryFlow, not a gimmick.
+// (v1.0.3: the self-descriptive caption under the week chart was
+// deleted — the motion speaks for itself, it is not narrated.)
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 
 import '../../core/diagnostics.dart';
+import '../../core/strings.dart';
 import '../../core/week_utils.dart';
 import '../../data/backend.dart';
 import '../../data/models.dart';
+import '../../widgets/entrance.dart';
 import '../../widgets/glass.dart';
 import '../../widgets/shimmer_skeleton.dart';
 import '../diagnostics/diagnostics_screen.dart';
@@ -49,62 +56,6 @@ class CountUpNumber extends StatelessWidget {
           style: style,
         );
       },
-    );
-  }
-}
-
-/// Fades + slides a child up slightly, after [delay]. Used for the
-/// KPI cards' staggered entrance.
-class DelayedFadeSlide extends StatefulWidget {
-  const DelayedFadeSlide({
-    super.key,
-    required this.child,
-    this.delay = Duration.zero,
-  });
-
-  final Widget child;
-  final Duration delay;
-
-  @override
-  State<DelayedFadeSlide> createState() => _DelayedFadeSlideState();
-}
-
-class _DelayedFadeSlideState extends State<DelayedFadeSlide>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _opacity;
-  late final Animation<Offset> _offset;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 650),
-    );
-    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _offset = Tween<Offset>(
-      begin: const Offset(0, 0.25),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
-    Future.delayed(widget.delay, () {
-      if (mounted) _controller.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _opacity,
-      child: SlideTransition(position: _offset, child: widget.child),
     );
   }
 }
@@ -214,10 +165,15 @@ class DashboardScreen extends StatefulWidget {
     super.key,
     required this.backend,
     required this.session,
+    this.entryGeneration = 0,
   });
 
   final ManagerBackend backend;
   final SessionController session;
+
+  /// Bumped by the shell on every dashboard entry so the slide-up
+  /// entrance replays (the tab stays mounted in the IndexedStack).
+  final int entryGeneration;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -370,8 +326,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     if (!mounted) return;
     setState(() {
-      _liveError = 'الاتصال المباشر وقف (summaries): $e'
-          '${fetchError != null ? '\nتعذر الجلب الاحتياطي: $fetchError' : ''}';
+      _liveError = DmStrings.of(context).liveStopped('summaries', e) +
+          (fetchError != null ? DmStrings.of(context).fallbackFailed(fetchError) : '');
       if (fetched != null) {
         _summariesFallback = true;
         final week = <String, List<DaySummary>>{};
@@ -401,8 +357,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     if (!mounted) return;
     setState(() {
-      _liveError = 'الاتصال المباشر وقف (users): $e'
-          '${fetchError != null ? '\nتعذر الجلب الاحتياطي: $fetchError' : ''}';
+      _liveError = DmStrings.of(context).liveStopped('users', e) +
+          (fetchError != null ? DmStrings.of(context).fallbackFailed(fetchError) : '');
       if (fetched != null) {
         final visible = visibleTeamUsers(fetched);
         _users = visible;
@@ -436,7 +392,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     diagnosticsLog.add('live', '$what stream error: $e');
     if (!mounted) return;
     setState(
-      () => _liveError = 'الاتصال المباشر وقف ($what): $e',
+      () => _liveError = DmStrings.of(context).liveStopped(what, e),
     );
   }
 
@@ -457,14 +413,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = DmStrings.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('لوحة التحكم'),
+        title: Text(s.dashboardTitle),
         actions: [
           IconButton(
             key: const ValueKey('dashboardDiagnostics'),
             icon: const Icon(Icons.bug_report_rounded),
-            tooltip: 'سجل التشخيص',
+            tooltip: s.diagnosticsTitle,
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -476,7 +433,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(
             key: const ValueKey('dashboardRefresh'),
             icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'تحديث',
+            tooltip: s.refresh,
             onPressed: _refresh,
           ),
         ],
@@ -502,15 +459,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Text(_liveError!),
                       if (_summariesFallback) ...[
                         const SizedBox(height: 4),
-                        const Text(
-                          'البيانات المعروضة من جلب لمرة واحدة — '
-                          'اضغط إعادة الاتصال لاستعادة المباشر.',
-                        ),
+                        Text(s.fallbackNote),
                       ],
                       const SizedBox(height: 12),
                       FilledButton(
                         onPressed: _refresh,
-                        child: const Text('إعادة الاتصال'),
+                        child: Text(s.reconnect),
                       ),
                     ],
                   ),
@@ -529,6 +483,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   weekKeys: weekDateKeys(_selectedDay),
                   backend: widget.backend,
                   managerUid: widget.session.account!.uid,
+                  generation: widget.entryGeneration,
                   onTeamTap: (account) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -557,16 +512,19 @@ class _DaySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = DmStrings.of(context);
     return GlassCard(
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.chevron_right_rounded),
+            icon: Icon(s.isArabic
+                ? Icons.chevron_right_rounded
+                : Icons.chevron_left_rounded),
             onPressed: () => onShift(-1),
           ),
           Expanded(
             child: Text(
-              arabicDayLabel(dateKey(selected)),
+              s.dayLabel(dateKey(selected)),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
@@ -574,7 +532,9 @@ class _DaySelector extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.chevron_left_rounded),
+            icon: Icon(s.isArabic
+                ? Icons.chevron_left_rounded
+                : Icons.chevron_right_rounded),
             onPressed: () => onShift(1),
           ),
         ],
@@ -590,6 +550,7 @@ class _DashboardBody extends StatelessWidget {
     required this.weekKeys,
     required this.backend,
     required this.managerUid,
+    required this.generation,
     required this.onTeamTap,
   });
 
@@ -598,36 +559,55 @@ class _DashboardBody extends StatelessWidget {
   final List<String> weekKeys;
   final ManagerBackend backend;
   final String managerUid;
+
+  /// Entrance generation from the shell: every bump replays the
+  /// slide-up entrance on every dashboard entry.
+  final int generation;
   final void Function(ManagerAccount account) onTeamTap;
 
   @override
   Widget build(BuildContext context) {
-    final kpis = computeKpis(data.todayRows);
-    final alerts = findAlerts(data.todayRows);
-    final weekOrders = weekOrdersPerDay(data.weekSummaries, weekKeys);
+    final s = DmStrings.of(context);
+    // Payroll is for drivers only: manager accounts (e.g. the admin
+    // account mirroring a driver's data) must not inflate orders,
+    // km or salary, and must not appear as driver rows. The Team
+    // roster (Application tab) still lists everyone.
+    final drivers =
+        data.users.where((u) => !u.isManager).toList();
+    final driverUids = drivers.map((u) => u.uid).toSet();
+    final driverRows = data.todayRows
+        .where((r) => !r.account.isManager)
+        .toList();
+    final driverWeek = <String, List<DaySummary>>{
+      for (final e in data.weekSummaries.entries)
+        e.key: e.value.where((x) => driverUids.contains(x.uid)).toList(),
+    };
+    final kpis = computeKpis(driverRows);
+    final alerts = findAlerts(driverRows);
+    final weekOrders = weekOrdersPerDay(driverWeek, weekKeys);
     final weekMax = weekOrders.fold<int>(0, (m, v) => v > m ? v : m);
-    // Week salary due: every visible driver's payoutWeek net summed.
+    // Week salary due: every driver's payoutWeek net summed.
     var weekSalary = 0.0;
     var weekOrdersTotal = 0;
     var weekKmTotal = 0.0;
-    for (final user in data.users) {
+    for (final user in drivers) {
       final summaries = weekKeys
-          .map((k) => data.weekSummaries[k] ?? const <DaySummary>[])
+          .map((k) => driverWeek[k] ?? const <DaySummary>[])
           .expand((list) => list)
-          .where((s) => s.uid == user.uid);
+          .where((x) => x.uid == user.uid);
       final payout = payoutWeek(
         summaries: summaries,
         adjustments: data.weekAdjustments[user.uid] ?? const [],
         weekKey: weekKey,
       );
       weekSalary += payout.net;
-      final userWeek = data.weekSummaries.values
+      final userWeek = driverWeek.values
           .expand((list) => list)
-          .where((s) => s.uid == user.uid);
-      weekOrdersTotal += userWeek.fold<int>(0, (s, x) => s + x.ordersCount);
-      weekKmTotal += userWeek.fold<double>(0, (s, x) => s + x.totalKm);
+          .where((x) => x.uid == user.uid);
+      weekOrdersTotal += userWeek.fold<int>(0, (x, y) => x + y.ordersCount);
+      weekKmTotal += userWeek.fold<double>(0, (x, y) => x + y.totalKm);
     }
-    const dayLabels = ['أحد', 'إثنين', 'ثلاث', 'أربع', 'خميس', 'جمعة', 'سبت'];
+    final dayLabels = s.dayShort;
     final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -642,9 +622,10 @@ class _DashboardBody extends StatelessWidget {
           children: [
             _KpiCard(
               index: 0,
-              label: 'فريق العمل',
+              generation: generation,
+              label: s.teamCountLabel,
               child: CountUpNumber(
-                value: data.users.length.toDouble(),
+                value: drivers.length.toDouble(),
                 style: Theme.of(context)
                     .textTheme
                     .headlineSmall
@@ -653,7 +634,8 @@ class _DashboardBody extends StatelessWidget {
             ),
             _KpiCard(
               index: 1,
-              label: 'متزامن اليوم',
+              generation: generation,
+              label: s.syncedTodayLabel,
               child: Row(
                 children: [
                   CountUpNumber(
@@ -664,7 +646,7 @@ class _DashboardBody extends StatelessWidget {
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   Text(
-                    ' / ${data.users.length}',
+                    ' / ${drivers.length}',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                 ],
@@ -672,7 +654,8 @@ class _DashboardBody extends StatelessWidget {
             ),
             _KpiCard(
               index: 2,
-              label: 'أوردرات اليوم',
+              generation: generation,
+              label: s.ordersTodayLabel,
               child: CountUpNumber(
                 value: kpis.totalOrders.toDouble(),
                 style: Theme.of(context)
@@ -683,7 +666,8 @@ class _DashboardBody extends StatelessWidget {
             ),
             _KpiCard(
               index: 3,
-              label: 'كم اليوم',
+              generation: generation,
+              label: s.kmTodayLabel,
               child: Row(
                 children: [
                   CountUpNumber(
@@ -694,13 +678,14 @@ class _DashboardBody extends StatelessWidget {
                         .headlineSmall
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
-                  const Text(' كم'),
+                  Text(s.kmSuffix),
                 ],
               ),
             ),
             _KpiCard(
               index: 4,
-              label: 'أوردرات الأسبوع',
+              generation: generation,
+              label: s.ordersWeekLabel,
               child: CountUpNumber(
                 value: weekOrdersTotal.toDouble(),
                 style: Theme.of(context)
@@ -711,7 +696,8 @@ class _DashboardBody extends StatelessWidget {
             ),
             _KpiCard(
               index: 5,
-              label: 'كم الأسبوع',
+              generation: generation,
+              label: s.kmWeekLabel,
               child: Row(
                 children: [
                   CountUpNumber(
@@ -722,21 +708,22 @@ class _DashboardBody extends StatelessWidget {
                         .headlineSmall
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
-                  const Text(' كم'),
+                  Text(s.kmSuffix),
                 ],
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
-        DelayedFadeSlide(
-          delay: const Duration(milliseconds: 500),
+        SlideUpItem(
+          index: 6,
+          generation: generation,
           child: GlassCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'مستحق الأسبوع',
+                  s.weekDueLabel,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 4),
@@ -747,21 +734,22 @@ class _DashboardBody extends StatelessWidget {
                         color: GlassTokens.primaryBlue,
                       ),
                 ),
-                const Text('ج.م — شامل البونص والخصومات'),
+                Text(s.weekDueNote),
               ],
             ),
           ),
         ),
         const SizedBox(height: 12),
-        DelayedFadeSlide(
-          delay: const Duration(milliseconds: 550),
+        SlideUpItem(
+          index: 7,
+          generation: generation,
           child: GlassCard(
             key: ValueKey('dashboardWeekChart-$weekKey'),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'أوردرات الأسبوع',
+                  s.ordersWeekLabel,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
@@ -786,24 +774,21 @@ class _DashboardBody extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'الأعمدة بتطلع من تحت لفوق، والأرقام بتتعد '
-                  'من صفر — البرنامج حي معاك.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
               ],
             ),
           ),
         ),
         if (!alerts.isEmpty) ...[
           const SizedBox(height: 12),
-          GlassCard(
+          SlideUpItem(
+            index: 7,
+            generation: generation,
+            child: GlassCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'محتاج انتباه',
+                  s.needsAttention,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
@@ -811,28 +796,32 @@ class _DashboardBody extends StatelessWidget {
                 const SizedBox(height: 8),
                 if (alerts.notSynced.isNotEmpty)
                   Text(
-                    'غير متزامن: ${alerts.notSynced.map((r) => r.account.displayName).join('، ')}',
+                    s.notSyncedNames(alerts.notSynced.map((r) => r.account.displayName).join(s.isArabic ? '، ' : ', ')),
                   ),
                 if (alerts.zeroOrders.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'صفر أوردرات: ${alerts.zeroOrders.map((r) => r.account.displayName).join('، ')}',
+                    s.zeroOrdersNames(alerts.zeroOrders.map((r) => r.account.displayName).join(s.isArabic ? '، ' : ', ')),
                   ),
                 ],
               ],
             ),
           ),
+          ),
         ],
         const SizedBox(height: 12),
         Text(
-          'الفريق اليوم',
+          s.teamTodayTitle,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
         ),
         const SizedBox(height: 8),
-        for (final row in sortDrivers(data.todayRows, DriverSort.orders))
-          Padding(
+        for (final (i, row) in sortDrivers(driverRows, DriverSort.orders).indexed)
+          SlideUpItem(
+            index: i,
+            generation: generation,
+            child: Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: GlassCard(
               onTap: () => onTeamTap(row.account),
@@ -862,21 +851,22 @@ class _DashboardBody extends StatelessWidget {
                         ),
                         Text(
                           row.synced
-                              ? '${row.orders} أوردر • ${row.km.toStringAsFixed(1)} كم'
-                              : 'غير متزامن اليوم',
+                              ? s.driverRowLine(row.orders, row.km.toStringAsFixed(1))
+                              : s.notSyncedToday,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
                     ),
                   ),
                   Text(
-                    egp(row.salary),
+                    egp(row.salary, s),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
                   ),
                 ],
               ),
+            ),
             ),
           ),
       ],
@@ -889,16 +879,19 @@ class _KpiCard extends StatelessWidget {
     required this.index,
     required this.label,
     required this.child,
+    required this.generation,
   });
 
   final int index;
   final String label;
   final Widget child;
+  final int generation;
 
   @override
   Widget build(BuildContext context) {
-    return DelayedFadeSlide(
-      delay: Duration(milliseconds: 100 + index * 90),
+    return SlideUpItem(
+      index: index,
+      generation: generation,
       child: GlassCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

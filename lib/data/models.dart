@@ -13,6 +13,8 @@
 // No Firebase imports here: every function below is unit-testable
 // without a backend.
 
+import '../core/strings.dart';
+
 /// Roles. `manager` is never self-assignable from a client: only an
 /// existing manager (or a console edit for the very first manager)
 // may set it. Firestore rules enforce the same server-side.
@@ -36,6 +38,14 @@ enum PayoutMethod {
         PayoutMethod.instapay => 'InstaPay',
         PayoutMethod.vodafoneCash => 'فودافون كاش',
         PayoutMethod.manual => 'يدوي',
+      };
+
+  /// Localized label; [labelAr] is the Arabic-only wrapper.
+  String labelFor(DmStrings s) => switch (this) {
+        PayoutMethod.none => s.payoutNotSet,
+        PayoutMethod.instapay => 'InstaPay',
+        PayoutMethod.vodafoneCash => s.payoutVodafoneCash,
+        PayoutMethod.manual => s.payoutManual,
       };
 }
 
@@ -444,12 +454,9 @@ class OrderEntry {
       routeOutLat.isNotEmpty || routeBackLat.isNotEmpty;
   int get routePointCount => routeOutLat.length + routeBackLat.length;
 
-  String get statusLabelAr => switch (status) {
-        1 => 'في الطريق للعميل',
-        2 => 'في الطريق للمارت',
-        3 => 'مكتمل',
-        _ => 'معلق',
-      };
+  String get statusLabelAr => statusLabel(DmStrings.arabic);
+
+  String statusLabel(DmStrings s) => s.orderStatusLabel(status);
 
   OrderEntry copyWith({
     double? kmOut,

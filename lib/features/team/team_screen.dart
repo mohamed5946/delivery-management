@@ -29,10 +29,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/diagnostics.dart';
+import '../../core/strings.dart';
 import '../../core/week_utils.dart';
 import '../../data/backend.dart';
 import '../../data/models.dart';
 import '../../widgets/confirm.dart';
+import '../../theme/dm_theme.dart';
 import '../../widgets/glass.dart';
 import '../../widgets/shimmer_skeleton.dart';
 
@@ -44,11 +46,11 @@ String _timeLabel(int? millis) {
   return '$h:$m';
 }
 
-String _durationLabel(int seconds) {
+String _durationLabel(int seconds, DmStrings s) {
   if (seconds <= 0) return '—';
   final m = seconds ~/ 60;
-  final s = seconds % 60;
-  return s == 0 ? '$m د' : '$m د $s ث';
+  final sec = seconds % 60;
+  return s.durationLabel(m, sec);
 }
 
 class TeamScreen extends StatefulWidget {
@@ -104,8 +106,7 @@ class _TeamScreenState extends State<TeamScreen> {
         diagnosticsLog.add('live', 'team stream error: $e');
         if (!mounted) return;
         setState(
-          () => _liveError =
-              'الاتصال المباشر وقف. اضغط تحديث لإعادة الاتصال.',
+          () => _liveError = DmStrings.of(context).liveStoppedGeneric,
         );
       },
     );
@@ -113,9 +114,13 @@ class _TeamScreenState extends State<TeamScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final s = DmStrings.of(context);
+    // DmPage: pushed routes are opaque — a bare transparent Scaffold
+    // renders black (v1.0.2 field bug); the aurora must be painted
+    // behind this page itself.
+    return DmPage(
       appBar: AppBar(
-        title: const Text('فريق العمل'),
+        title: Text(s.teamTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -134,8 +139,8 @@ class _TeamScreenState extends State<TeamScreen> {
             TextField(
               key: const ValueKey('teamSearch'),
               controller: _search,
-              decoration: const InputDecoration(
-                labelText: 'ابحث بالاسم',
+              decoration: InputDecoration(
+                labelText: s.searchByName,
                 prefixIcon: Icon(Icons.search_rounded),
                 border: OutlineInputBorder(),
               ),
@@ -154,7 +159,7 @@ class _TeamScreenState extends State<TeamScreen> {
                         setState(() => _liveError = null);
                         _subscribe();
                       },
-                      child: const Text('إعادة الاتصال'),
+                      child: Text(s.reconnect),
                     ),
                   ],
                 ),
@@ -172,8 +177,8 @@ class _TeamScreenState extends State<TeamScreen> {
                         u,
                   ];
                   if (users.isEmpty) {
-                    return const GlassCard(
-                      child: Text('مفيش نتائج مطابقة.'),
+                    return GlassCard(
+                      child: Text(s.noMatches),
                     );
                   }
                   return Column(
@@ -221,7 +226,7 @@ class _TeamScreenState extends State<TeamScreen> {
                                             .titleSmall,
                                       ),
                                       Text(
-                                        user.isManager ? 'مدير' : 'سواق',
+                                        user.isManager ? s.managerRoleLabel : s.driverRoleLabel,
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall,
@@ -364,8 +369,7 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
     diagnosticsLog.add('live', 'driver detail $what stream error: $e');
     if (!mounted) return;
     setState(
-      () => _liveError =
-          'الاتصال المباشر وقف ($what). اضغط تحديث لإعادة الاتصال.',
+      () => _liveError = DmStrings.of(context).liveStoppedGeneric,
     );
   }
 
@@ -386,6 +390,7 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
     final account = _account ?? widget.account;
     final isSelf = account.uid == widget.managerUid;
     final scheme = Theme.of(context).colorScheme;
+    final s = DmStrings.of(context);
     DaySummary? daySummary() {
       for (final s in _weekSummaries) {
         if (s.dateKey == _dayKey) return s;
@@ -400,7 +405,9 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
       weekKey: _weekKey,
     );
     final loaded = _summariesLoaded && _adjustmentsLoaded;
-    return Scaffold(
+    // DmPage: see TeamScreen — pushed routes need the aurora behind
+    // the page itself or they render black.
+    return DmPage(
       appBar: AppBar(
         title: Text(account.displayName),
         actions: [
@@ -426,7 +433,7 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                       const SizedBox(height: 12),
                       FilledButton(
                         onPressed: _refresh,
-                        child: const Text('إعادة الاتصال'),
+                        child: Text(s.reconnect),
                       ),
                     ],
                   ),
@@ -458,7 +465,7 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          account.isManager ? 'مدير' : 'سواق',
+                          account.isManager ? s.managerRoleLabel : s.driverRoleLabel,
                           style: const TextStyle(
                             color: GlassTokens.primaryBlue,
                             fontWeight: FontWeight.w800,
@@ -468,8 +475,8 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                     ],
                   ),
                   if (account.blocked)
-                    const Text(
-                      'محظور حاليًا',
+                    Text(
+                      s.currentlyBlocked,
                       style: TextStyle(
                         color: Colors.red,
                         fontWeight: FontWeight.w800,
@@ -478,27 +485,27 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                   const SizedBox(height: 8),
                   InfoRow(
                     icon: Icons.phone_rounded,
-                    label: 'التليفون',
+                    label: s.phoneLabel,
                     value: account.phone,
                   ),
                   InfoRow(
                     icon: Icons.email_rounded,
-                    label: 'الإيميل',
+                    label: s.emailLabel,
                     value: account.email,
                   ),
                   InfoRow(
                     icon: Icons.payments_rounded,
-                    label: 'طريقة القبض',
-                    value: account.payoutMethod.labelAr,
+                    label: s.payoutMethodLabel,
+                    value: account.payoutMethod.labelFor(s),
                   ),
                   InfoRow(
                     icon: Icons.phone_rounded,
-                    label: 'رقم التحويل',
+                    label: s.transferNumberLabel,
                     value: account.payoutNumber,
                   ),
                   InfoRow(
                     icon: Icons.account_balance_wallet_rounded,
-                    label: 'اسم المحفظة',
+                    label: s.walletNameLabel,
                     value: account.payoutName,
                   ),
                 ],
@@ -509,19 +516,23 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.chevron_right_rounded),
+                    icon: Icon(s.isArabic
+                        ? Icons.chevron_right_rounded
+                        : Icons.chevron_left_rounded),
                     onPressed: () => _shiftDay(-1),
                   ),
                   Expanded(
                     child: Text(
-                      arabicDayLabel(_dayKey),
+                      s.dayLabel(_dayKey),
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.chevron_left_rounded),
+                    icon: Icon(s.isArabic
+                        ? Icons.chevron_left_rounded
+                        : Icons.chevron_right_rounded),
                     onPressed: () => _shiftDay(1),
                   ),
                 ],
@@ -536,7 +547,7 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'يوم ${arabicDayLabel(_dayKey)}',
+                      s.daySectionTitle(s.dayLabel(_dayKey)),
                       style: Theme.of(context)
                           .textTheme
                           .titleSmall
@@ -544,26 +555,32 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                     ),
                     const SizedBox(height: 8),
                     if (summary == null)
-                      const Text('مفيش بيانات لليوم ده.')
+                      Text(s.noDayData)
                     else ...[
                       Text(
-                        'أوردرات: ${summary.ordersCount} • '
-                        'كم: ${summary.totalKm.toStringAsFixed(1)} • '
-                        'المجموع: ${egp(summary.salaryTotal)}',
+                        s.daySummaryLine(
+                          summary.ordersCount,
+                          summary.totalKm.toStringAsFixed(1),
+                          egp(summary.salaryTotal, s),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'سعر الأوردر: ${egp(summary.orderPrice)} • '
-                        'ثابت اليوم: ${egp(summary.dailyFixedPay)}',
+                        s.orderPriceLine(
+                          egp(summary.orderPrice, s),
+                          egp(summary.dailyFixedPay, s),
+                        ),
                       ),
                       Text(
-                        'بونص مسافة: ${egp(summary.distanceBonus)} • '
-                        'بونص يدوي: ${egp(summary.manualBonus)} • '
-                        'بونص ثابت: ${egp(summary.flatBonus)}',
+                        s.bonusesLine(
+                          egp(summary.distanceBonus, s),
+                          egp(summary.manualBonus, s),
+                          egp(summary.flatBonus, s),
+                        ),
                       ),
                       if (summary.editedByManager)
-                        const Text(
-                          'آخر تعديل كان من المدير.',
+                        Text(
+                          s.managerEditedNote,
                           style: TextStyle(fontSize: 13),
                         ),
                     ],
@@ -571,7 +588,7 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                     FilledButton.icon(
                       key: const ValueKey('driverEditDay'),
                       icon: const Icon(Icons.edit_rounded),
-                      label: const Text('تعديل بيانات اليوم'),
+                      label: Text(s.editDayTitle),
                       onPressed: () async {
                         final saved = await showDialog<bool>(
                           context: context,
@@ -586,8 +603,8 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                         if (saved != true) return;
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('تم حفظ اليوم'),
+                          SnackBar(
+                            content: Text(s.daySaved),
                           ),
                         );
                       },
@@ -601,26 +618,26 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'مجموع الأسبوع',
+                      s.weekTotalTitle,
                       style: Theme.of(context)
                           .textTheme
                           .titleSmall
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
-                    Text('مجاميع الأيام: ${egp(payout.base)}'),
+                    Text(s.dayTotals(egp(payout.base, s))),
                     if (payout.bonus > 0)
                       Text(
-                        'بونص: +${egp(payout.bonus)}',
+                        s.weekBonus(egp(payout.bonus, s)),
                         style: TextStyle(color: scheme.primary),
                       ),
                     if (payout.deduction > 0)
                       Text(
-                        'خصم: −${egp(payout.deduction)}',
+                        s.weekDeduction(egp(payout.deduction, s)),
                         style: TextStyle(color: scheme.error),
                       ),
                     Text(
-                      'الصافي: ${egp(payout.net)}',
+                      s.netTotal(egp(payout.net, s)),
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                       ),
@@ -630,7 +647,7 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
               ),
               const SizedBox(height: 12),
               if (!_recordLoaded)
-                const GlassCard(child: Text('جاري تحميل الأوردرات...'))
+                GlassCard(child: Text(s.loadingOrders))
               else
                 _OrdersSection(
                   record: _record,
@@ -669,10 +686,7 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (isSelf)
-                      const Text(
-                        'ده حسابك — مينفعش تغيّر دورك أو تحظر '
-                        'نفسك بنفسك.',
-                      )
+                      Text(s.selfRoleNote)
                     else ...[
                       FilledButton(
                         key: const ValueKey('driverRoleToggle'),
@@ -680,14 +694,15 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                           final toManager = !account.isManager;
                           final confirmed = await showConfirmDialog(
                             context: context,
-                            title:
-                                toManager ? 'ترقية لمدير؟' : 'تنزيل لسواق؟',
+                            title: toManager
+                                ? s.promoteToManagerQ
+                                : s.demoteToDriverQ,
                             body: toManager
-                                ? '${account.displayName} هيبقى مدير '
-                                    'ويشوف كل بيانات الفريق.'
-                                : '${account.displayName} هيرجع سواق '
-                                    'ومش هيشوف صفحة المديرين.',
-                            confirmLabel: toManager ? 'ترقية' : 'تنزيل',
+                                ? s.promoteBody(account.displayName)
+                                : s.demoteBody(account.displayName),
+                            confirmLabel: toManager
+                                ? s.promoteAction
+                                : s.demoteAction,
                             destructive: false,
                           );
                           if (!confirmed) return;
@@ -702,13 +717,13 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('فشل: $e')),
+                                SnackBar(content: Text(s.failed(s.localizeError(e)))),
                               );
                             }
                           }
                         },
                         child: Text(
-                          account.isManager ? 'تنزيل لسواق' : 'ترقية لمدير',
+                          account.isManager ? s.demoteToDriver : s.promoteToManager,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -718,12 +733,9 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                           if (!account.blocked) {
                             final confirmed = await showConfirmDialog(
                               context: context,
-                              title: 'حظر السواق؟',
-                              body: 'مش هيقدر يسجل دخول، وهيختفي '
-                                  'من الفريق، وأجوره مش هتتحسب. '
-                                  'داتاه محفوظة — فك الحظر بيرجّعه '
-                                  'كامل. مفيش حاجة بتتمسح.',
-                              confirmLabel: 'حظر',
+                              title: s.blockDriverQ,
+                              body: s.blockDriverBody,
+                              confirmLabel: s.blockAction,
                             );
                             if (!confirmed) return;
                             try {
@@ -735,17 +747,16 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                             } catch (e) {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('فشل: $e')),
+                                  SnackBar(content: Text(s.failed(s.localizeError(e)))),
                                 );
                               }
                             }
                           } else {
                             final confirmed = await showConfirmDialog(
                               context: context,
-                              title: 'فك حظر السواق؟',
-                              body: '${account.displayName} هيرجع '
-                                  'يسجل دخول بداتاه كاملة.',
-                              confirmLabel: 'فك الحظر',
+                              title: s.unblockDriverQ,
+                              body: s.unblockBody(account.displayName),
+                              confirmLabel: s.unblockAction,
                               destructive: false,
                             );
                             if (!confirmed) return;
@@ -758,14 +769,14 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                             } catch (e) {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('فشل: $e')),
+                                  SnackBar(content: Text(s.failed(s.localizeError(e)))),
                                 );
                               }
                             }
                           }
                         },
                         child: Text(
-                          account.blocked ? 'فك الحظر' : 'حظر',
+                          account.blocked ? s.unblockAction : s.blockAction,
                         ),
                       ),
                     ],
@@ -790,30 +801,31 @@ class _OrdersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = DmStrings.of(context);
     final rec = record;
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'أوردرات اليوم',
+            s.todayOrdersTitle,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
           ),
           const SizedBox(height: 8),
           if (rec == null)
-            const Text('مفيش سجل أوردرات لليوم ده.')
+            Text(s.noOrderHistory)
           else if (!rec.hasEntries) ...[
             Text(
-              '${rec.completedOrders} أوردر مكتمل • '
-              '${rec.totalKm.toStringAsFixed(1)} كم',
+              s.completedOrdersLine(
+                rec.completedOrders,
+                rec.totalKm.toStringAsFixed(1),
+              ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'تفاصيل الأوردر الواحد لسه مش بتترفع للسحابة من '
-              'تطبيق السواق — أول ما تحديث الرفع ده ينزل، '
-              'الأوردرات هتظهر هنا بالتفصيل.',
+            Text(
+              s.orderUploadNote,
               style: TextStyle(fontSize: 13),
             ),
           ] else
@@ -844,7 +856,7 @@ class _OrdersSection extends StatelessWidget {
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            Text(order.statusLabelAr),
+                            Text(order.statusLabel(s)),
                             if (order.notes.isNotEmpty)
                               Text(
                                 order.notes,
@@ -855,12 +867,12 @@ class _OrdersSection extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${order.effectiveKmTotal.toStringAsFixed(1)} كم',
+                        s.kmValue(double.parse(order.effectiveKmTotal.toStringAsFixed(1))),
                       ),
                       if (order.manualBonusEgp > 0) ...[
                         const SizedBox(width: 8),
                         Text(
-                          '+${egp(order.manualBonusEgp)}',
+                          '+${egp(order.manualBonusEgp, s)}',
                           style: const TextStyle(
                             color: GlassTokens.primaryBlue,
                             fontWeight: FontWeight.w700,
@@ -950,6 +962,7 @@ class _AdjustmentsSectionState extends State<_AdjustmentsSection> {
 
   @override
   Widget build(BuildContext context) {
+    final s = DmStrings.of(context);
     final scheme = Theme.of(context).colorScheme;
     final sorted = [...widget.adjustments]
       ..sort((a, b) => b.createdAtMillis.compareTo(a.createdAtMillis));
@@ -958,14 +971,14 @@ class _AdjustmentsSectionState extends State<_AdjustmentsSection> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'تعديلات المدير (بونص / خصم)',
+            s.managerAdjustmentsTitle,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
           ),
           const SizedBox(height: 8),
           if (sorted.isEmpty)
-            const Text('مفيش تعديلات لحد دلوقتي.')
+            Text(s.noAdjustmentsYet)
           else
             for (final a in sorted)
               Padding(
@@ -974,12 +987,12 @@ class _AdjustmentsSectionState extends State<_AdjustmentsSection> {
                   children: [
                     Expanded(
                       child: Text(
-                        '${a.isBonus ? 'بونص' : 'خصم'}: ${a.reason} '
-                        '(أسبوع ${a.weekKey})',
+                        '${a.isBonus ? s.bonusWord : s.deductionWord}: ${a.reason} '
+                        '${s.weekTag(a.weekKey)}',
                       ),
                     ),
                     Text(
-                      signedEgp(a.amount, isBonus: a.isBonus),
+                      signedEgp(a.amount, s, isBonus: a.isBonus),
                       style: TextStyle(
                         color:
                             a.isBonus ? scheme.primary : scheme.error,
@@ -992,9 +1005,9 @@ class _AdjustmentsSectionState extends State<_AdjustmentsSection> {
                       onPressed: () async {
                         final confirmed = await showConfirmDialog(
                           context: context,
-                          title: 'مسح التعديل؟',
-                          body: 'التعديل هيتشال من مجموع الأسبوع.',
-                          confirmLabel: 'مسح',
+                          title: s.deleteAdjustmentQ,
+                          body: s.deleteAdjustmentBody,
+                          confirmLabel: s.delete,
                         );
                         if (!confirmed) return;
                         await widget.backend.deleteAdjustment(
@@ -1011,13 +1024,13 @@ class _AdjustmentsSectionState extends State<_AdjustmentsSection> {
           Row(
             children: [
               ChoiceChip(
-                label: const Text('بونص'),
+                label: Text(s.bonusWord),
                 selected: _isBonus,
                 onSelected: (_) => setState(() => _isBonus = true),
               ),
               const SizedBox(width: 8),
               ChoiceChip(
-                label: const Text('خصم'),
+                label: Text(s.deductionWord),
                 selected: !_isBonus,
                 onSelected: (_) => setState(() => _isBonus = false),
               ),
@@ -1028,30 +1041,30 @@ class _AdjustmentsSectionState extends State<_AdjustmentsSection> {
             controller: _amount,
             keyboardType:
                 const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'المبلغ (ج.م)',
+            decoration: InputDecoration(
+              labelText: s.amountLabelEgp,
               border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _reason,
-            decoration: const InputDecoration(
-              labelText: 'السبب (مطلوب)',
+            decoration: InputDecoration(
+              labelText: s.reasonRequiredLabel,
               border: OutlineInputBorder(),
             ),
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
             Text(
-              _error!,
+              s.localizeError(_error!),
               style: TextStyle(color: scheme.error),
             ),
           ],
           const SizedBox(height: 8),
           FilledButton(
             onPressed: _busy ? null : _add,
-            child: const Text('إضافة التعديل'),
+            child: Text(s.addAdjustment),
           ),
         ],
       ),
@@ -1124,8 +1137,9 @@ class _EditDayDialogState extends State<_EditDayDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final s = DmStrings.of(context);
     return AlertDialog(
-      title: const Text('تعديل بيانات اليوم'),
+      title: Text(s.editDayTitle),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1133,53 +1147,53 @@ class _EditDayDialogState extends State<_EditDayDialog> {
             TextField(
               controller: _orders,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'عدد الأوردرات'),
+              decoration: InputDecoration(labelText: s.ordersCountField),
             ),
             TextField(
               controller: _km,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'إجمالي الكم'),
+              decoration: InputDecoration(labelText: s.totalKmField),
             ),
             TextField(
               controller: _price,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration:
-                  const InputDecoration(labelText: 'سعر الأوردر (ج.م)'),
+                  InputDecoration(labelText: s.orderPriceField),
             ),
             TextField(
               controller: _fixed,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration:
-                  const InputDecoration(labelText: 'ثابت اليوم (ج.م)'),
+                  InputDecoration(labelText: s.fixedPayField),
             ),
             TextField(
               controller: _distance,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration:
-                  const InputDecoration(labelText: 'بونص مسافة (ج.م)'),
+                  InputDecoration(labelText: s.distanceBonusField),
             ),
             TextField(
               controller: _manual,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration:
-                  const InputDecoration(labelText: 'بونص يدوي (ج.م)'),
+                  InputDecoration(labelText: s.manualBonusField),
             ),
             TextField(
               controller: _flat,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration:
-                  const InputDecoration(labelText: 'بونص ثابت (ج.م)'),
+                  InputDecoration(labelText: s.flatBonusField),
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(
-                _error!,
+                s.localizeError(_error!),
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
@@ -1189,7 +1203,7 @@ class _EditDayDialogState extends State<_EditDayDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('إلغاء'),
+          child: Text(s.cancel),
         ),
         FilledButton(
           onPressed: () async {
@@ -1214,7 +1228,7 @@ class _EditDayDialogState extends State<_EditDayDialog> {
                 manual < 0 ||
                 flat == null ||
                 flat < 0) {
-              setState(() => _error = 'أدخل أرقام صحيحة أكبر من أو تساوي صفر.');
+              setState(() => _error = s.validNumbersError);
               return;
             }
             try {
@@ -1241,7 +1255,7 @@ class _EditDayDialogState extends State<_EditDayDialog> {
             if (!context.mounted) return;
             Navigator.pop(context, true);
           },
-          child: const Text('حفظ'),
+          child: Text(s.save),
         ),
       ],
     );
@@ -1279,6 +1293,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _edit() async {
+    final s = DmStrings.of(context);
     final notes = TextEditingController(text: _order.notes);
     final phone = TextEditingController(text: _order.phone);
     final kmOut = TextEditingController(
@@ -1298,7 +1313,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) {
           return AlertDialog(
-            title: const Text('تعديل الأوردر'),
+            title: Text(s.editOrderTitle),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1306,15 +1321,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   TextField(
                     controller: notes,
                     maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'العنوان / ملاحظات',
+                    decoration: InputDecoration(
+                      labelText: s.addressNotesField,
                     ),
                   ),
                   TextField(
                     controller: phone,
                     keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'تليفون العميل',
+                    decoration: InputDecoration(
+                      labelText: s.customerPhoneField,
                     ),
                   ),
                   TextField(
@@ -1322,8 +1337,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
-                      labelText: 'كم الذهاب',
+                    decoration: InputDecoration(
+                      labelText: s.kmOutField,
                     ),
                   ),
                   TextField(
@@ -1331,8 +1346,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
-                      labelText: 'كم العودة',
+                    decoration: InputDecoration(
+                      labelText: s.kmBackField,
                     ),
                   ),
                   TextField(
@@ -1340,8 +1355,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
-                      labelText: 'بونص يدوي (ج.م)',
+                    decoration: InputDecoration(
+                      labelText: s.manualBonusField,
                     ),
                   ),
                   if (error.isNotEmpty)
@@ -1357,7 +1372,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('إلغاء'),
+                child: Text(s.cancel),
               ),
               FilledButton(
                 onPressed: () {
@@ -1375,12 +1390,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       back < 0 ||
                       b == null ||
                       b < 0) {
-                    setDialog(() => error = 'أدخل أرقام صحيحة.');
+                    setDialog(() => error = s.validNumbersShort);
                     return;
                   }
                   Navigator.pop(ctx, true);
                 },
-                child: const Text('حفظ'),
+                child: Text(s.save),
               ),
             ],
           );
@@ -1419,7 +1434,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل الحفظ: $e')),
+          SnackBar(content: Text(s.saveFailed(s.localizeError(e)))),
         );
       }
     }
@@ -1427,13 +1442,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = DmStrings.of(context);
     final o = _order;
     final shortId =
         o.id.length > 6 ? o.id.substring(o.id.length - 6) : o.id;
     final totalSeconds = o.outgoingDurationSec + o.returnDurationSec;
-    return Scaffold(
+    // DmPage: see TeamScreen — pushed routes need the aurora behind
+    // the page itself or they render black.
+    return DmPage(
       appBar: AppBar(
-        title: Text('أوردر #$shortId'),
+        title: Text(s.orderTitle(shortId)),
         actions: [
           IconButton(
             key: const ValueKey('orderEdit'),
@@ -1452,29 +1470,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '#$shortId — ${o.statusLabelAr}',
+                    '#$shortId — ${o.statusLabel(s)}',
                     style: Theme.of(context).textTheme.titleMedium
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
                   InfoRow(
                     icon: Icons.location_on_rounded,
-                    label: 'العنوان / ملاحظات',
+                    label: s.addressNotesField,
                     value: o.notes,
                   ),
                   InfoRow(
                     icon: Icons.phone_rounded,
-                    label: 'تليفون العميل',
+                    label: s.customerPhoneField,
                     value: o.phone,
                   ),
                   InfoRow(
                     icon: Icons.tag_rounded,
-                    label: 'رقم الأوردر الكامل',
+                    label: s.fullOrderNumber,
                     value: o.id,
                   ),
                   InfoRow(
                     icon: Icons.calendar_today_rounded,
-                    label: 'اليوم',
+                    label: s.dayField,
                     value: o.dateKey,
                   ),
                 ],
@@ -1486,27 +1504,31 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'المسافات',
+                    s.distancesSection,
                     style: Theme.of(context).textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'ذهاب: ${o.effectiveKmOut.toStringAsFixed(2)} كم'
-                    '${o.isManualOut ? ' (يدوي)' : ''} • '
-                    'عودة: ${o.effectiveKmBack.toStringAsFixed(2)} كم'
-                    '${o.isManualBack ? ' (يدوي)' : ''}',
+                    '${s.kmOutLine(o.effectiveKmOut.toStringAsFixed(2))}'
+                    '${o.isManualOut ? s.manualMarker : ''} • '
+                    '${s.kmBackLine(o.effectiveKmBack.toStringAsFixed(2))}'
+                    '${o.isManualBack ? s.manualMarker : ''}',
                   ),
                   Text(
-                    'إجمالي: ${o.effectiveKmTotal.toStringAsFixed(2)} كم',
+                    s.kmTotalLine(o.effectiveKmTotal.toStringAsFixed(2)),
                   ),
                   Text(
-                    'GPS ذهاب: ${o.gpsKmOut.toStringAsFixed(2)} كم • '
-                    'GPS عودة: ${o.gpsKmBack.toStringAsFixed(2)} كم',
+                    s.gpsKmLine(
+                      o.gpsKmOut.toStringAsFixed(2),
+                      o.gpsKmBack.toStringAsFixed(2),
+                    ),
                   ),
                   Text(
-                    'يدوي ذهاب: ${o.kmOut.toStringAsFixed(2)} كم • '
-                    'يدوي عودة: ${o.kmBack.toStringAsFixed(2)} كم',
+                    s.manualKmLine(
+                      o.kmOut.toStringAsFixed(2),
+                      o.kmBack.toStringAsFixed(2),
+                    ),
                   ),
                 ],
               ),
@@ -1517,20 +1539,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'التوقيتات والمدد',
+                    s.timesSection,
                     style: Theme.of(context).textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
-                  Text('بدأ التوصيل: ${_timeLabel(o.pickupTimeMillis)}'),
-                  Text('وصل للعميل: ${_timeLabel(o.deliveredTimeMillis)}'),
+                  Text(s.pickupLabel(_timeLabel(o.pickupTimeMillis))),
+                  Text(s.deliveredLabel(_timeLabel(o.deliveredTimeMillis))),
                   Text(
-                    'وصل للمارت: ${_timeLabel(o.martArrivedTimeMillis)}',
+                    s.martLabel(_timeLabel(o.martArrivedTimeMillis)),
                   ),
                   Text(
-                    'مدة الذهاب: ${_durationLabel(o.outgoingDurationSec)} • '
-                    'مدة العودة: ${_durationLabel(o.returnDurationSec)} • '
-                    'الإجمالي: ${_durationLabel(totalSeconds)}',
+                    s.durationsLine(
+                      _durationLabel(o.outgoingDurationSec, s),
+                      _durationLabel(o.returnDurationSec, s),
+                      _durationLabel(totalSeconds, s),
+                    ),
                   ),
                 ],
               ),
@@ -1541,24 +1565,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'مالية وحالة',
+                    s.moneyStatusSection,
                     style: Theme.of(context).textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
-                  Text('بونص يدوي: ${egp(o.manualBonusEgp)}'),
-                  Text(o.countOnly ? 'إدخال عددي فقط: نعم' : 'إدخال عددي فقط: لا'),
+                  Text(s.manualBonusLine(egp(o.manualBonusEgp, s))),
+                  Text(s.countOnlyYes(o.countOnly)),
                   Text(
-                    'اتعمل: ${_timeLabel(o.createdAtMillis == 0 ? null : o.createdAtMillis)} '
-                    '• آخر تحديث: ${_timeLabel(o.timestampMillis)}',
+                    s.createdUpdatedLine(
+                      _timeLabel(o.createdAtMillis == 0 ? null : o.createdAtMillis),
+                      _timeLabel(o.timestampMillis),
+                    ),
                   ),
                   Text(
-                    'نقاط المسار المسجلة: ${o.routePointCount} • '
-                    'نقاط الطريق: ${o.roadOutLat.length + o.roadBackLat.length}',
+                    s.routePointsLine(
+                      o.routePointCount,
+                      o.roadOutLat.length + o.roadBackLat.length,
+                    ),
                   ),
-                  const Text(
-                    'ملحوظة: الخريطة نفسها مش موجودة في نسخة '
-                    'المدير الأولى — كل حقول البيانات موجودة هنا.',
+                  Text(
+                    s.routePointsNote,
                     style: TextStyle(fontSize: 13),
                   ),
                 ],

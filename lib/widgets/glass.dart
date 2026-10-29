@@ -5,6 +5,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../core/strings.dart';
+
 class GlassTokens {
   static const double radius = 18;
   static const double radiusSmall = 14;
@@ -92,10 +94,9 @@ class InfoRow extends StatelessWidget {
   }
 }
 
-/// Money text: whole EGP, no decimals noise.
-String egp(double value) => '${value.toStringAsFixed(0)} ج.م';
+/// Money text: whole EGP, no decimals noise. Arabic renders
+/// "3280 ج.م", English renders "EGP 3280".
+String egp(double value, DmStrings s) => s.money(value);
 
-String signedEgp(double value, {required bool isBonus}) {
-  final sign = isBonus ? '+' : '−';
-  return '$sign${value.toStringAsFixed(0)} ج.م';
-}
+String signedEgp(double value, DmStrings s, {required bool isBonus}) =>
+    s.signedMoney(value, isBonus: isBonus);

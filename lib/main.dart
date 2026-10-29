@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/diagnostics.dart';
+import 'core/strings.dart';
 import 'data/backend.dart';
 import 'data/firebase_options.dart';
 import 'features/login/login_screen.dart';
@@ -99,10 +100,13 @@ class _DeliveryManagementAppState extends State<DeliveryManagementApp> {
     return ListenableBuilder(
       listenable: widget.settings,
       builder: (context, _) {
+        // Session messages follow the settings language.
+        _session.strings =
+            DmStrings.forLocale(widget.settings.locale);
         return MaterialApp(
           title: 'Delivery Management',
           debugShowCheckedModeBanner: false,
-          locale: const Locale('ar'),
+          locale: widget.settings.locale,
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,

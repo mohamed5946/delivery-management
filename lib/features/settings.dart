@@ -1,6 +1,6 @@
 // App settings for Delivery Management (Application tab).
-// Only real, working settings: theme mode (persisted) — nothing
-// decorative, nothing dead.
+// Only real, working settings: theme mode + language (persisted) —
+// nothing decorative, nothing dead.
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,7 +14,12 @@ class SettingsController extends ChangeNotifier {
   // the DEFAULT (no stored value, or an unknown value) is light.
   ThemeMode themeMode = ThemeMode.light;
 
+  /// App language. Arabic is the default (current language);
+  /// English switches the whole UI and flips to LTR.
+  Locale locale = const Locale('ar');
+
   static const _themeKey = 'dm_theme_mode';
+  static const _localeKey = 'dm_locale';
 
   Future<void> load() async {
     try {
@@ -26,8 +31,13 @@ class SettingsController extends ChangeNotifier {
         'system' => ThemeMode.system,
         _ => ThemeMode.light,
       };
+      locale = switch (_prefs!.getString(_localeKey)) {
+        'en' => const Locale('en'),
+        _ => const Locale('ar'),
+      };
     } catch (_) {
       themeMode = ThemeMode.light;
+      locale = const Locale('ar');
     }
     notifyListeners();
   }
@@ -44,6 +54,18 @@ class SettingsController extends ChangeNotifier {
           ThemeMode.dark => 'dark',
           ThemeMode.system => 'system',
         },
+      );
+    } catch (_) {}
+  }
+
+  Future<void> setLocale(Locale value) async {
+    locale = value;
+    notifyListeners();
+    try {
+      _prefs ??= await SharedPreferences.getInstance();
+      await _prefs!.setString(
+        _localeKey,
+        value.languageCode == 'en' ? 'en' : 'ar',
       );
     } catch (_) {}
   }

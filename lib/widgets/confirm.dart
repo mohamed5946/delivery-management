@@ -9,6 +9,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../core/strings.dart';
+
 Future<bool> showConfirmDialog({
   required BuildContext context,
   required String title,
@@ -25,7 +27,7 @@ Future<bool> showConfirmDialog({
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('إلغاء'),
+          child: Text(DmStrings.of(ctx).cancel),
         ),
         ConfirmButton(
           label: confirmLabel,
@@ -75,7 +77,7 @@ class _ConfirmButtonState extends State<ConfirmButton> {
             }
           },
           child: Text(
-            _armed ? 'اضغط تاني للتأكيد' : widget.label,
+            _armed ? DmStrings.of(context).tapAgainToConfirm : widget.label,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w800,

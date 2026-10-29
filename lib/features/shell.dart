@@ -12,6 +12,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../core/strings.dart';
 import '../data/backend.dart';
 import '../theme/dm_theme.dart';
 import 'application/application_screen.dart';
@@ -40,14 +41,28 @@ class ManagerShell extends StatefulWidget {
 class _ManagerShellState extends State<ManagerShell> {
   var _index = 0;
 
+  /// Dashboard entrance generation: bumps every time the dashboard
+  /// tab becomes selected after being inactive, so the slide-up
+  /// entrance replays on EVERY dashboard entry (the tab stays
+  /// mounted in the IndexedStack, so mount-only animation would
+  /// play once and never again).
+  var _dashboardGeneration = 0;
+
+  void _selectTab(int i) {
+    if (i == 0 && _index != 0) _dashboardGeneration++;
+    setState(() => _index = i);
+  }
+
   @override
   Widget build(BuildContext context) {
     final account = widget.session.account!;
+    final s = DmStrings.of(context);
     final screens = [
       DashboardScreen(
         key: const ValueKey('tabDashboard'),
         backend: widget.backend,
         session: widget.session,
+        entryGeneration: _dashboardGeneration,
       ),
       PayrollScreen(
         key: const ValueKey('tabPayroll'),
@@ -86,18 +101,18 @@ class _ManagerShellState extends State<ManagerShell> {
             bottom: bottomInset,
             child: DmGlassNavBar(
               selectedIndex: _index,
-              onDestinationSelected: (i) => setState(() => _index = i),
+              onDestinationSelected: _selectTab,
               icons: const [
                 Icons.dashboard_rounded,
                 Icons.payments_rounded,
                 Icons.apps_rounded,
                 Icons.block_rounded,
               ],
-              labels: const [
-                'Dashboard',
-                'الأجور الأسبوعية',
+              labels: [
+                s.dashboardTitle,
+                s.payrollTitle,
                 'Application',
-                'Block',
+                s.blockTitle,
               ],
             ),
           ),
