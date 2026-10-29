@@ -1,0 +1,138 @@
+// Delivery Management v1 — manager-only companion to DeliveryFlow.
+//
+// Same Firebase project, same Firestore data, manager accounts
+// only. Arabic UI (Egyptian, masculine forms), RTL.
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+
+import 'core/diagnostics.dart';
+import 'data/backend.dart';
+import 'data/firebase_options.dart';
+import 'features/login/login_screen.dart';
+import 'features/session.dart';
+import 'features/settings.dart';
+import 'features/shell.dart';
+import 'widgets/glass.dart';
+import 'widgets/shimmer_skeleton.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (DefaultFirebaseOptions.isConfigured) {
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } catch (e) {
+      diagnosticsLog.add('init', 'Firebase init failed: $e');
+    }
+  } else {
+    diagnosticsLog.add(
+      'init',
+      'Firebase not configured: placeholders in '
+      'lib/data/firebase_options.dart.',
+    );
+  }
+  final settings = SettingsController();
+  await settings.load();
+  runApp(
+    DeliveryManagementApp(
+      backend: FirestoreManagerBackend(),
+      settings: settings,
+    ),
+  );
+}
+
+/// Testable app root: tests inject a [FakeManagerBackend] and a
+/// fresh [SessionController]/[SettingsController].
+class DeliveryManagementApp extends StatefulWidget {
+  const DeliveryManagementApp({
+    super.key,
+    required this.backend,
+    required this.settings,
+    this.session,
+  });
+
+  final ManagerBackend backend;
+  final SettingsController settings;
+  final SessionController? session;
+
+  @override
+  State<DeliveryManagementApp> createState() =>
+      _DeliveryManagementAppState();
+}
+
+class _DeliveryManagementAppState extends State<DeliveryManagementApp> {
+  late final SessionController _session;
+
+  @override
+  void initState() {
+    super.initState();
+    _session = widget.session ?? SessionController(widget.backend);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _session.restore();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: widget.settings,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'Delivery Management',
+          debugShowCheckedModeBanner: false,
+          locale: const Locale('ar'),
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          themeMode: widget.settings.themeMode,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: GlassTokens.primaryBlue,
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+            cardColor: Colors.white,
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: GlassTokens.primaryBlue,
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+          ),
+          home: ListenableBuilder(
+            listenable: _session,
+            builder: (context, _) {
+              switch (_session.status) {
+                case SessionStatus.loading:
+                  return const Scaffold(
+                    body: SingleChildScrollView(
+                      padding: GlassTokens.screenPadding,
+                      child: DashboardSkeleton(),
+                    ),
+                  );
+                case SessionStatus.ready:
+                  return ManagerShell(
+                    backend: widget.backend,
+                    session: _session,
+                    settings: widget.settings,
+                  );
+                case SessionStatus.signedOut:
+                case SessionStatus.denied:
+                case SessionStatus.blocked:
+                case SessionStatus.mustChangePassword:
+                  return LoginScreen(session: _session);
+              }
+            },
+          ),
+        );
+      },
+    );
+  }
+}
