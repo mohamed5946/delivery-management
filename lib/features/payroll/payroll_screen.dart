@@ -44,6 +44,15 @@ class _PayrollScreenState extends State<PayrollScreen> {
   final Map<String, List<Adjustment>> _adjustments = {};
   final _subs = <StreamSubscription<dynamic>>[];
   final _adjustmentSubs = <String, StreamSubscription<List<Adjustment>>>{};
+  // Per-user summaries listeners — same fix as the dashboard: the
+  // collectionGroup('summaries') query is denied for a manager under
+  // the published rules (field-proven PERMISSION_DENIED), while
+  // per-user subcollection reads work.
+  final _summarySubs = <String, StreamSubscription<List<DaySummary>>>{};
+  final _userSummaries = <String, List<DaySummary>>{};
+  final _summaryPending = <String>{};
+  var _summaryKeys = const <String>[];
+  var _summariesFallback = false;
   var _usersLoaded = false;
   var _summariesLoaded = false;
   String? _liveError;
@@ -69,15 +78,24 @@ class _PayrollScreenState extends State<PayrollScreen> {
       sub.cancel();
     }
     _adjustmentSubs.clear();
+    for (final sub in _summarySubs.values) {
+      sub.cancel();
+    }
+    _summarySubs.clear();
+    _userSummaries.clear();
+    _summaryPending.clear();
+    _summariesLoaded = false;
   }
 
   String get _weekKey => dateKey(_weekStart);
 
-  /// Live listeners (users, week summaries, per-user adjustments).
-  /// Re-attaching is also the manual refresh fallback.
+  /// Live listeners (users, per-user week summaries, per-user
+  /// adjustments). Re-attaching is also the manual refresh fallback.
   void _subscribe() {
     _cancelAll();
     _liveError = null;
+    _summariesFallback = false;
+    _summaryKeys = weekDateKeys(_weekStart);
     _subs.add(
       widget.backend.watchUsers().listen(
         (users) {
@@ -88,36 +106,114 @@ class _PayrollScreenState extends State<PayrollScreen> {
             _usersLoaded = true;
           });
           _syncAdjustmentSubs(visible);
+          _syncSummarySubs(visible);
           _rebuildRows();
         },
-        onError: (Object e) => _onLiveError('users', e),
-      ),
-    );
-    final keys = weekDateKeys(_weekStart);
-    _subs.add(
-      widget.backend.watchSummariesForDays(keys).listen(
-        (summaries) {
-          if (!mounted) return;
-          final week = <String, List<DaySummary>>{};
-          for (final s in summaries) {
-            (week[s.dateKey] ??= []).add(s);
-          }
-          setState(() {
-            _week = week;
-            _summariesLoaded = true;
-          });
-          _rebuildRows();
-        },
-        onError: (Object e) => _onLiveError('summaries', e),
+        onError: (Object e) => _onUsersError(e),
       ),
     );
   }
 
+  void _syncSummarySubs(List<ManagerAccount> users) {
+    final ids = users.map((u) => u.uid).toSet();
+    var changed = false;
+    for (final id
+        in _summarySubs.keys.where((k) => !ids.contains(k)).toList()) {
+      _summarySubs.remove(id)?.cancel();
+      _userSummaries.remove(id);
+      _summaryPending.remove(id);
+      changed = true;
+    }
+    for (final user in users) {
+      if (_summarySubs.containsKey(user.uid)) continue;
+      _summaryPending.add(user.uid);
+      _summarySubs[user.uid] =
+          widget.backend.watchSummariesForUser(user.uid, _summaryKeys).listen(
+        (list) {
+          if (!mounted) return;
+          _userSummaries[user.uid] = list;
+          _summaryPending.remove(user.uid);
+          _rebuildWeek();
+        },
+        onError: (Object e) => _onSummariesError(e),
+      );
+    }
+    if (changed || _summarySubs.isEmpty) _rebuildWeek();
+  }
+
+  void _rebuildWeek() {
+    if (!mounted) return;
+    final week = <String, List<DaySummary>>{};
+    for (final list in _userSummaries.values) {
+      for (final s in list) {
+        (week[s.dateKey] ??= []).add(s);
+      }
+    }
+    setState(() {
+      _week = week;
+      // Latch: once loaded (live or fallback) it stays loaded.
+      if (_summaryPending.isEmpty || _summariesFallback) {
+        _summariesLoaded = true;
+      }
+    });
+    _rebuildRows();
+  }
+
+  /// Summaries listener failed: one-time fetch fallback + the REAL
+  /// reason on the error card (same fix as the dashboard).
+  Future<void> _onSummariesError(Object e) async {
+    diagnosticsLog.add('live', 'payroll summaries stream error: $e');
+    if (!mounted) return;
+    Map<String, List<DaySummary>>? fetched;
+    Object? fetchError;
+    try {
+      fetched = await widget.backend.listSummariesForDays(_summaryKeys);
+    } catch (err) {
+      fetchError = err;
+    }
+    if (!mounted) return;
+    setState(() {
+      _liveError = 'الاتصال المباشر وقف (summaries): $e'
+          '${fetchError != null ? '\nتعذر الجلب الاحتياطي: $fetchError' : ''}';
+      if (fetched != null) {
+        _summariesFallback = true;
+        _week = fetched;
+        _summariesLoaded = true;
+      }
+    });
+    _rebuildRows();
+  }
+
+  /// Users stream failed: one-time fetch fallback + real reason.
+  Future<void> _onUsersError(Object e) async {
+    diagnosticsLog.add('live', 'payroll users stream error: $e');
+    if (!mounted) return;
+    List<ManagerAccount>? fetched;
+    Object? fetchError;
+    try {
+      fetched = await widget.backend.listUsers();
+    } catch (err) {
+      fetchError = err;
+    }
+    if (!mounted) return;
+    setState(() {
+      _liveError = 'الاتصال المباشر وقف (users): $e'
+          '${fetchError != null ? '\nتعذر الجلب الاحتياطي: $fetchError' : ''}';
+      if (fetched != null) {
+        final visible = visibleTeamUsers(fetched);
+        _users = visible;
+        _usersLoaded = true;
+        _syncAdjustmentSubs(visible);
+        _syncSummarySubs(visible);
+      }
+    });
+    _rebuildRows();
+  }
+
   void _syncAdjustmentSubs(List<ManagerAccount> users) {
     final ids = users.map((u) => u.uid).toSet();
-    for (final id in _adjustmentSubs.keys
-        .where((k) => !ids.contains(k))
-        .toList()) {
+    for (final id
+        in _adjustmentSubs.keys.where((k) => !ids.contains(k)).toList()) {
       _adjustmentSubs.remove(id)?.cancel();
     }
     for (final user in users) {
@@ -164,13 +260,15 @@ class _PayrollScreenState extends State<PayrollScreen> {
     diagnosticsLog.add('live', 'payroll $what stream error: $e');
     if (!mounted) return;
     setState(
-      () => _liveError =
-          'الاتصال المباشر وقف ($what). اضغط تحديث لإعادة الاتصال.',
+      () => _liveError = 'الاتصال المباشر وقف ($what): $e',
     );
   }
 
   void _refresh() {
-    setState(() => _liveError = null);
+    setState(() {
+      _liveError = null;
+      _summariesFallback = false;
+    });
     _subscribe();
   }
 
@@ -209,7 +307,9 @@ class _PayrollScreenState extends State<PayrollScreen> {
                     child: Text(
                       'أسبوع ${arabicDayLabel(_weekKey)}',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleMedium
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                   ),
@@ -227,6 +327,13 @@ class _PayrollScreenState extends State<PayrollScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(_liveError!),
+                    if (_summariesFallback) ...[
+                      const SizedBox(height: 4),
+                      const Text(
+                        'البيانات المعروضة من جلب لمرة واحدة — '
+                        'اضغط إعادة الاتصال لاستعادة المباشر.',
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     FilledButton(
                       onPressed: _refresh,
@@ -263,21 +370,18 @@ class _PayrollScreenState extends State<PayrollScreen> {
                           children: [
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     row.account.displayName,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall,
+                                    style:
+                                        Theme.of(context).textTheme.titleSmall,
                                   ),
                                   Text(
                                     'طريقة القبض: '
                                     '${row.account.payoutMethod.labelAr}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
                                   ),
                                   if (row.payout.totalBonus > 0)
                                     Text(
@@ -293,9 +397,8 @@ class _PayrollScreenState extends State<PayrollScreen> {
                                     Text(
                                       'خصم: −${egp(row.payout.deduction)}',
                                       style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .error,
+                                        color:
+                                            Theme.of(context).colorScheme.error,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
@@ -382,9 +485,9 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
     _subs.add(
       widget.backend
           .watchSummariesForUser(
-            widget.account.uid,
-            weekDateKeys(widget.weekStart),
-          )
+        widget.account.uid,
+        weekDateKeys(widget.weekStart),
+      )
           .listen(
         (summaries) {
           if (!mounted) return;
@@ -527,7 +630,9 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                     children: [
                       Text(
                         'المستحق',
-                        style: Theme.of(context).textTheme.titleSmall
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 8),
@@ -545,7 +650,9 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                       const Divider(),
                       Text(
                         egp(payout.net),
-                        style: Theme.of(context).textTheme.titleMedium
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                     ],
@@ -562,10 +669,9 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                           : summary.manualBonus +
                               summary.distanceBonus +
                               summary.flatBonus;
-                      final hasBonus = dayBonus > 0 ||
-                          dayAdjs.any((a) => a.isBonus);
-                      final hasDeduction =
-                          dayAdjs.any((a) => !a.isBonus);
+                      final hasBonus =
+                          dayBonus > 0 || dayAdjs.any((a) => a.isBonus);
+                      final hasDeduction = dayAdjs.any((a) => !a.isBonus);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: GlassCard(
@@ -654,7 +760,9 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                       children: [
                         Text(
                           'تعديلات تانية لنفس الأسبوع',
-                          style: Theme.of(context).textTheme.titleSmall
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const Text(
@@ -670,9 +778,8 @@ class _PayoutDetailScreenState extends State<PayoutDetailScreen> {
                               Text(
                                 signedEgp(a.amount, isBonus: a.isBonus),
                                 style: TextStyle(
-                                  color: a.isBonus
-                                      ? scheme.primary
-                                      : scheme.error,
+                                  color:
+                                      a.isBonus ? scheme.primary : scheme.error,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),

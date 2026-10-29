@@ -9,7 +9,10 @@ class SettingsController extends ChangeNotifier {
   SettingsController({SharedPreferences? prefs}) : _prefs = prefs;
 
   SharedPreferences? _prefs;
-  ThemeMode themeMode = ThemeMode.system;
+  // DeliveryFlow's default is its light glassy look — never
+  // system-dark. A stored 'system' choice is still honored; only
+  // the DEFAULT (no stored value, or an unknown value) is light.
+  ThemeMode themeMode = ThemeMode.light;
 
   static const _themeKey = 'dm_theme_mode';
 
@@ -20,10 +23,11 @@ class SettingsController extends ChangeNotifier {
       themeMode = switch (raw) {
         'light' => ThemeMode.light,
         'dark' => ThemeMode.dark,
-        _ => ThemeMode.system,
+        'system' => ThemeMode.system,
+        _ => ThemeMode.light,
       };
     } catch (_) {
-      themeMode = ThemeMode.system;
+      themeMode = ThemeMode.light;
     }
     notifyListeners();
   }

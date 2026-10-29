@@ -13,6 +13,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/backend.dart';
+import '../theme/dm_theme.dart';
 import 'application/application_screen.dart';
 import 'block/block_screen.dart';
 import 'dashboard/dashboard_screen.dart';
@@ -65,27 +66,40 @@ class _ManagerShellState extends State<ManagerShell> {
         managerUid: account.uid,
       ),
     ];
+    // DeliveryFlow's shell pattern: the floating glass nav bar is an
+    // overlay above the content (not in the bottomNavigationBar
+    // slot), and the aurora background extends edge-to-edge behind
+    // it. Content gets bottom padding so nothing hides under the bar.
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
     return Scaffold(
-      body: IndexedStack(index: _index, children: screens),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_rounded),
-            label: 'Dashboard',
+      extendBody: true,
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          Padding(
+            padding: EdgeInsets.only(bottom: 96 + bottomInset),
+            child: IndexedStack(index: _index, children: screens),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.payments_rounded),
-            label: 'الأجور الأسبوعية',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.apps_rounded),
-            label: 'Application',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.block_rounded),
-            label: 'Block',
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: bottomInset,
+            child: DmGlassNavBar(
+              selectedIndex: _index,
+              onDestinationSelected: (i) => setState(() => _index = i),
+              icons: const [
+                Icons.dashboard_rounded,
+                Icons.payments_rounded,
+                Icons.apps_rounded,
+                Icons.block_rounded,
+              ],
+              labels: const [
+                'Dashboard',
+                'الأجور الأسبوعية',
+                'Application',
+                'Block',
+              ],
+            ),
           ),
         ],
       ),

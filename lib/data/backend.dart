@@ -35,8 +35,7 @@ class BackendBlocked implements Exception {
 }
 
 class BackendNotManager implements Exception {
-  const BackendNotManager(
-      [this.message = 'هذا التطبيق للمديرين فقط.']);
+  const BackendNotManager([this.message = 'هذا التطبيق للمديرين فقط.']);
   final String message;
   @override
   String toString() => message;
@@ -45,8 +44,7 @@ class BackendNotManager implements Exception {
 class BackendNotConfigured implements Exception {
   const BackendNotConfigured();
   @override
-  String toString() =>
-      'لم يتم ربط Firebase بعد. سجّل تطبيق Android جديد في '
+  String toString() => 'لم يتم ربط Firebase بعد. سجّل تطبيق Android جديد في '
       'كونسول Firebase بنفس المشروع ثم الصق إعدادات Firebase '
       'في lib/data/firebase_options.dart.';
 }
@@ -158,17 +156,13 @@ class UnconfiguredBackend implements ManagerBackend {
   }
 
   @override
-  Future<void> changePassword(String currentPassword, String newPassword) async {
+  Future<void> changePassword(
+      String currentPassword, String newPassword) async {
     throw const BackendNotConfigured();
   }
 
   @override
   Stream<List<ManagerAccount>> watchUsers() {
-    return Stream.error(const BackendNotConfigured());
-  }
-
-  @override
-  Stream<List<DaySummary>> watchSummariesForDays(List<String> dateKeys) {
     return Stream.error(const BackendNotConfigured());
   }
 
@@ -285,10 +279,12 @@ abstract class ManagerBackend {
   /// All user docs, live.
   Stream<List<ManagerAccount>> watchUsers();
 
-  /// Summaries for the given days, across all users, live.
-  Stream<List<DaySummary>> watchSummariesForDays(List<String> dateKeys);
-
-  /// One user's summaries for the given days, live.
+  /// One user's summaries for the given days, live. There is
+  /// deliberately NO cross-user summaries stream: a
+  /// collectionGroup('summaries') query is denied with
+  /// PERMISSION_DENIED for a manager under the published rules
+  /// (field-proven 2026-10-29), while per-user subcollection reads
+  /// are allowed — so screens attach one listener per user.
   Stream<List<DaySummary>> watchSummariesForUser(
     String uid,
     List<String> dateKeys,
@@ -403,8 +399,7 @@ class FirestoreManagerBackend implements ManagerBackend {
     _requireConfigured();
     final snap = await _users.get();
     return [
-      for (final doc in snap.docs)
-        ManagerAccount.fromJson(doc.id, doc.data()),
+      for (final doc in snap.docs) ManagerAccount.fromJson(doc.id, doc.data()),
     ];
   }
 
@@ -452,8 +447,7 @@ class FirestoreManagerBackend implements ManagerBackend {
     _requireConfigured();
     final snap = await _adjustments(uid).get();
     return [
-      for (final doc in snap.docs)
-        Adjustment.fromJson(doc.id, uid, doc.data()),
+      for (final doc in snap.docs) Adjustment.fromJson(doc.id, uid, doc.data()),
     ];
   }
 
@@ -463,8 +457,7 @@ class FirestoreManagerBackend implements ManagerBackend {
     String dateKey,
   ) async {
     _requireConfigured();
-    final snap =
-        await _users.doc(uid).collection('orders').doc(dateKey).get();
+    final snap = await _users.doc(uid).collection('orders').doc(dateKey).get();
     final data = snap.data();
     if (data == null) return null;
     return DayOrderRecord.fromJson(data);
@@ -500,8 +493,7 @@ class FirestoreManagerBackend implements ManagerBackend {
       updatedAtMillis: at,
     );
     final data = stamped.toJson()
-      ..['expireAt'] =
-          Timestamp.fromDate(detailExpireAtDate(summary.dateKey));
+      ..['expireAt'] = Timestamp.fromDate(detailExpireAtDate(summary.dateKey));
     await _summaries(summary.uid).doc(summary.dateKey).set(data);
     await _refreshRollupBestEffort(
       summary.uid,
@@ -520,8 +512,7 @@ class FirestoreManagerBackend implements ManagerBackend {
     final data = record.toJson()
       ..['expireAt'] = Timestamp.fromDate(detailExpireAtDate(dateKey))
       ..['editedByManagerUid'] = managerUid
-      ..['editedByManagerAtMillis'] =
-          DateTime.now().millisecondsSinceEpoch;
+      ..['editedByManagerAtMillis'] = DateTime.now().millisecondsSinceEpoch;
     await _users.doc(uid).collection('orders').doc(dateKey).set(data);
   }
 
@@ -592,8 +583,7 @@ class FirestoreManagerBackend implements ManagerBackend {
     }
     await _users.doc(uid).update({
       'blocked': blocked,
-      'blockedAt':
-          blocked ? DateTime.now().millisecondsSinceEpoch : 0,
+      'blockedAt': blocked ? DateTime.now().millisecondsSinceEpoch : 0,
       'blockedBy': blocked ? managerUid : '',
     });
   }
@@ -629,28 +619,9 @@ class FirestoreManagerBackend implements ManagerBackend {
   Stream<List<ManagerAccount>> watchUsers() {
     _requireConfigured();
     return _users.snapshots().map(
-      (snap) => [
-        for (final doc in snap.docs)
-          ManagerAccount.fromJson(doc.id, doc.data()),
-      ],
-    );
-  }
-
-  @override
-  Stream<List<DaySummary>> watchSummariesForDays(List<String> dateKeys) {
-    _requireConfigured();
-    if (dateKeys.isEmpty) return Stream.value(const []);
-    return _firestore
-        .collectionGroup('summaries')
-        .where('dateKey', whereIn: dateKeys)
-        .snapshots()
-        .map(
           (snap) => [
             for (final doc in snap.docs)
-              DaySummary.fromJson(
-                doc.reference.parent.parent!.id,
-                doc.data(),
-              ),
+              ManagerAccount.fromJson(doc.id, doc.data()),
           ],
         );
   }
@@ -662,13 +633,9 @@ class FirestoreManagerBackend implements ManagerBackend {
   ) {
     _requireConfigured();
     if (dateKeys.isEmpty) return Stream.value(const []);
-    return _summaries(uid)
-        .where('dateKey', whereIn: dateKeys)
-        .snapshots()
-        .map(
+    return _summaries(uid).where('dateKey', whereIn: dateKeys).snapshots().map(
           (snap) => [
-            for (final doc in snap.docs)
-              DaySummary.fromJson(uid, doc.data()),
+            for (final doc in snap.docs) DaySummary.fromJson(uid, doc.data()),
           ],
         );
   }
@@ -677,11 +644,11 @@ class FirestoreManagerBackend implements ManagerBackend {
   Stream<List<Adjustment>> watchAdjustments(String uid) {
     _requireConfigured();
     return _adjustments(uid).snapshots().map(
-      (snap) => [
-        for (final doc in snap.docs)
-          Adjustment.fromJson(doc.id, uid, doc.data()),
-      ],
-    );
+          (snap) => [
+            for (final doc in snap.docs)
+              Adjustment.fromJson(doc.id, uid, doc.data()),
+          ],
+        );
   }
 
   @override
@@ -731,8 +698,7 @@ class FakeManagerBackend implements ManagerBackend {
           for (final e in adjustments.entries) e.key: List.of(e.value),
         },
         _orderRecords = {
-          for (final e in orderRecords.entries)
-            e.key: Map.of(e.value),
+          for (final e in orderRecords.entries) e.key: Map.of(e.value),
         };
 
   final Map<String, ManagerAccount> _accounts;
@@ -741,6 +707,10 @@ class FakeManagerBackend implements ManagerBackend {
   final Map<String, List<Adjustment>> _adjustments;
   final Map<String, Map<String, DayOrderRecord>> _orderRecords;
   String? _uid;
+
+  /// Test seam: when set, per-user summaries streams fail with this
+  /// error (drives the listener-error fallback tests).
+  Object? summariesStreamError;
 
   // ── Live-feed machinery ──────────────────────────────────────
   final _liveFeeds = <_LiveFeed>[];
@@ -802,8 +772,7 @@ class FakeManagerBackend implements ManagerBackend {
     if (looksLikePhone(trimmed)) {
       final normalized = normalizeEgyptPhone(trimmed);
       for (final a in _accounts.values) {
-        if (a.phone.isNotEmpty &&
-            normalizeEgyptPhone(a.phone) == normalized) {
+        if (a.phone.isNotEmpty && normalizeEgyptPhone(a.phone) == normalized) {
           return a.email;
         }
       }
@@ -1043,19 +1012,15 @@ class FakeManagerBackend implements ManagerBackend {
   }
 
   @override
-  Stream<List<DaySummary>> watchSummariesForDays(List<String> dateKeys) {
-    return _liveStream(() => [
-          for (final list in _summaries.values)
-            for (final s in list)
-              if (dateKeys.contains(s.dateKey)) s,
-        ]);
-  }
-
-  @override
   Stream<List<DaySummary>> watchSummariesForUser(
     String uid,
     List<String> dateKeys,
   ) {
+    // Test seam: when set, per-user summaries streams fail with this
+    // error (drives the listener-error fallback tests).
+    if (summariesStreamError != null) {
+      return Stream.error(summariesStreamError!);
+    }
     return _liveStream(() => [
           for (final s in _summaries[uid] ?? const [])
             if (dateKeys.contains(s.dateKey)) s,

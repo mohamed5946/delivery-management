@@ -14,6 +14,7 @@ import 'features/login/login_screen.dart';
 import 'features/session.dart';
 import 'features/settings.dart';
 import 'features/shell.dart';
+import 'theme/dm_theme.dart';
 import 'widgets/glass.dart';
 import 'widgets/shimmer_skeleton.dart';
 
@@ -42,7 +43,7 @@ Future<void> main() async {
     diagnosticsLog.add(
       'init',
       'Firebase not configured: placeholders in '
-      'lib/data/firebase_options.dart.',
+          'lib/data/firebase_options.dart.',
     );
   }
   final settings = SettingsController();
@@ -78,8 +79,7 @@ class DeliveryManagementApp extends StatefulWidget {
   final bool firebaseReady;
 
   @override
-  State<DeliveryManagementApp> createState() =>
-      _DeliveryManagementAppState();
+  State<DeliveryManagementApp> createState() => _DeliveryManagementAppState();
 }
 
 class _DeliveryManagementAppState extends State<DeliveryManagementApp> {
@@ -110,48 +110,44 @@ class _DeliveryManagementAppState extends State<DeliveryManagementApp> {
           ],
           supportedLocales: const [Locale('ar'), Locale('en')],
           themeMode: widget.settings.themeMode,
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: GlassTokens.primaryBlue,
-              brightness: Brightness.light,
-            ),
-            useMaterial3: true,
-            cardColor: Colors.white,
-          ),
-          darkTheme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: GlassTokens.primaryBlue,
-              brightness: Brightness.dark,
-            ),
-            useMaterial3: true,
-          ),
-          home: ListenableBuilder(
-            listenable: _session,
-            builder: (context, _) {
-              switch (_session.status) {
-                case SessionStatus.loading:
-                  return const Scaffold(
-                    body: SingleChildScrollView(
-                      padding: GlassTokens.screenPadding,
-                      child: DashboardSkeleton(),
-                    ),
-                  );
-                case SessionStatus.ready:
-                  return ManagerShell(
-                    backend: widget.backend,
-                    session: _session,
-                    settings: widget.settings,
-                  );
-                case SessionStatus.signedOut:
-                case SessionStatus.denied:
-                case SessionStatus.blocked:
-                case SessionStatus.mustChangePassword:
-                  return LoginScreen(
-                    session: _session,
-                    firebaseReady: widget.firebaseReady,
-                  );
-              }
-            },
+          // DeliveryFlow's theme (default preset), ported — not a
+          // generic Material seed theme.
+          theme: DmTheme.light(),
+          darkTheme: DmTheme.dark(),
+          // DeliveryFlow's shell pattern: the aurora background sits
+          // behind every screen (all Scaffolds are transparent).
+          home: Stack(
+            children: [
+              const DmAuroraBackground(),
+              ListenableBuilder(
+                listenable: _session,
+                builder: (context, _) {
+                  switch (_session.status) {
+                    case SessionStatus.loading:
+                      return const Scaffold(
+                        body: SingleChildScrollView(
+                          padding: GlassTokens.screenPadding,
+                          child: DashboardSkeleton(),
+                        ),
+                      );
+                    case SessionStatus.ready:
+                      return ManagerShell(
+                        backend: widget.backend,
+                        session: _session,
+                        settings: widget.settings,
+                      );
+                    case SessionStatus.signedOut:
+                    case SessionStatus.denied:
+                    case SessionStatus.blocked:
+                    case SessionStatus.mustChangePassword:
+                      return LoginScreen(
+                        session: _session,
+                        firebaseReady: widget.firebaseReady,
+                      );
+                  }
+                },
+              ),
+            ],
           ),
         );
       },

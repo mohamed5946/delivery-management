@@ -230,6 +230,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<DaySummary> _todaySummaries = const [];
   final Map<String, List<Adjustment>> _weekAdjustments = {};
   final _adjustmentSubs = <String, StreamSubscription<List<Adjustment>>>{};
+  // Per-user summaries listeners (one per visible user). A
+  // collectionGroup('summaries') query is NOT used: under the
+  // published rules it is denied with PERMISSION_DENIED for a
+  // manager (field-proven 2026-10-29: the users listener works, so
+  // the caller IS a manager, yet the group query is rejected),
+  // while the same manager reads per-user subcollections fine —
+  // the pattern DeliveryFlow's own dashboard already uses.
+  final _summarySubs = <String, StreamSubscription<List<DaySummary>>>{};
+  final _userSummaries = <String, List<DaySummary>>{};
+  final _summaryPending = <String>{};
+  var _summaryKeys = const <String>[];
+  var _summariesFallback = false;
   final _subs = <StreamSubscription<dynamic>>[];
   var _usersLoaded = false;
   var _summariesLoaded = false;
@@ -256,16 +268,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       sub.cancel();
     }
     _adjustmentSubs.clear();
+    for (final sub in _summarySubs.values) {
+      sub.cancel();
+    }
+    _summarySubs.clear();
+    _userSummaries.clear();
+    _summaryPending.clear();
+    _summariesLoaded = false;
   }
 
   String get _todayKey => dateKey(_selectedDay);
 
-  /// Attaches the live listeners (users, day summaries, per-user
-  /// adjustments). Cancelling + re-attaching is also the manual
-  /// refresh fallback.
+  /// Attaches the live listeners (users, per-user day summaries,
+  /// per-user adjustments). Cancelling + re-attaching is also the
+  /// manual refresh fallback.
   void _subscribe() {
     _cancelAll();
     _liveError = null;
+    _summariesFallback = false;
+    _summaryKeys = <String>{_todayKey, ...weekDateKeys(_selectedDay)}.toList();
     _subs.add(
       widget.backend.watchUsers().listen(
         (users) {
@@ -276,37 +297,126 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _usersLoaded = true;
           });
           _syncAdjustmentSubs(visible);
+          _syncSummarySubs(visible);
         },
-        onError: (Object e) => _onLiveError('users', e),
-      ),
-    );
-    final keys = <String>{_todayKey, ...weekDateKeys(_selectedDay)}.toList();
-    _subs.add(
-      widget.backend.watchSummariesForDays(keys).listen(
-        (summaries) {
-          if (!mounted) return;
-          final week = <String, List<DaySummary>>{};
-          final today = <DaySummary>[];
-          for (final s in summaries) {
-            (week[s.dateKey] ??= []).add(s);
-            if (s.dateKey == _todayKey) today.add(s);
-          }
-          setState(() {
-            _weekSummaries = week;
-            _todaySummaries = today;
-            _summariesLoaded = true;
-          });
-        },
-        onError: (Object e) => _onLiveError('summaries', e),
+        onError: (Object e) => _onUsersError(e),
       ),
     );
   }
 
+  void _syncSummarySubs(List<ManagerAccount> users) {
+    final ids = users.map((u) => u.uid).toSet();
+    var changed = false;
+    for (final id
+        in _summarySubs.keys.where((k) => !ids.contains(k)).toList()) {
+      _summarySubs.remove(id)?.cancel();
+      _userSummaries.remove(id);
+      _summaryPending.remove(id);
+      changed = true;
+    }
+    for (final user in users) {
+      if (_summarySubs.containsKey(user.uid)) continue;
+      _summaryPending.add(user.uid);
+      _summarySubs[user.uid] =
+          widget.backend.watchSummariesForUser(user.uid, _summaryKeys).listen(
+        (list) {
+          if (!mounted) return;
+          _userSummaries[user.uid] = list;
+          _summaryPending.remove(user.uid);
+          _rebuildSummaryAggregates();
+        },
+        onError: (Object e) => _onSummariesError(e),
+      );
+    }
+    if (changed || _summarySubs.isEmpty) _rebuildSummaryAggregates();
+  }
+
+  void _rebuildSummaryAggregates() {
+    if (!mounted) return;
+    final week = <String, List<DaySummary>>{};
+    final today = <DaySummary>[];
+    for (final list in _userSummaries.values) {
+      for (final s in list) {
+        (week[s.dateKey] ??= []).add(s);
+        if (s.dateKey == _todayKey) today.add(s);
+      }
+    }
+    setState(() {
+      _weekSummaries = week;
+      _todaySummaries = today;
+      // Latch: once loaded (live or fallback) it stays loaded;
+      // later per-user events only grow the data, never re-skeleton.
+      if (_summaryPending.isEmpty || _summariesFallback) {
+        _summariesLoaded = true;
+      }
+    });
+  }
+
+  /// A summaries listener failed (field-proven: PERMISSION_DENIED on
+  /// the old group query). Fall back to a one-time fetch — per-user
+  /// single-doc gets, the access pattern DeliveryFlow's own
+  /// dashboard already uses — so the screen still shows data, and
+  /// put the REAL reason on the error card, not a generic line.
+  Future<void> _onSummariesError(Object e) async {
+    diagnosticsLog.add('live', 'summaries stream error: $e');
+    if (!mounted) return;
+    List<DaySummary>? fetched;
+    Object? fetchError;
+    try {
+      final byDay = await widget.backend.listSummariesForDays(_summaryKeys);
+      fetched = byDay.values.expand((list) => list).toList();
+    } catch (err) {
+      fetchError = err;
+    }
+    if (!mounted) return;
+    setState(() {
+      _liveError = 'الاتصال المباشر وقف (summaries): $e'
+          '${fetchError != null ? '\nتعذر الجلب الاحتياطي: $fetchError' : ''}';
+      if (fetched != null) {
+        _summariesFallback = true;
+        final week = <String, List<DaySummary>>{};
+        final today = <DaySummary>[];
+        for (final s in fetched) {
+          (week[s.dateKey] ??= []).add(s);
+          if (s.dateKey == _todayKey) today.add(s);
+        }
+        _weekSummaries = week;
+        _todaySummaries = today;
+        _summariesLoaded = true;
+      }
+    });
+  }
+
+  /// Same resilience for the users stream: one-time fetch fallback,
+  /// real reason on the card.
+  Future<void> _onUsersError(Object e) async {
+    diagnosticsLog.add('live', 'users stream error: $e');
+    if (!mounted) return;
+    List<ManagerAccount>? fetched;
+    Object? fetchError;
+    try {
+      fetched = await widget.backend.listUsers();
+    } catch (err) {
+      fetchError = err;
+    }
+    if (!mounted) return;
+    setState(() {
+      _liveError = 'الاتصال المباشر وقف (users): $e'
+          '${fetchError != null ? '\nتعذر الجلب الاحتياطي: $fetchError' : ''}';
+      if (fetched != null) {
+        final visible = visibleTeamUsers(fetched);
+        _users = visible;
+        _usersLoaded = true;
+        _syncAdjustmentSubs(visible);
+        _syncSummarySubs(visible);
+      }
+    });
+  }
+
   void _syncAdjustmentSubs(List<ManagerAccount> users) {
     final ids = users.map((u) => u.uid).toSet();
-    for (final id in _adjustmentSubs.keys
-        .where((k) => !ids.contains(k))
-        .toList()) {
+    for (final id
+        in _adjustmentSubs.keys.where((k) => !ids.contains(k)).toList()) {
       _adjustmentSubs.remove(id)?.cancel();
     }
     for (final user in users) {
@@ -326,13 +436,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     diagnosticsLog.add('live', '$what stream error: $e');
     if (!mounted) return;
     setState(
-      () => _liveError =
-          'الاتصال المباشر وقف ($what). اضغط تحديث لإعادة الاتصال.',
+      () => _liveError = 'الاتصال المباشر وقف ($what): $e',
     );
   }
 
   void _refresh() {
-    setState(() => _liveError = null);
+    setState(() {
+      _liveError = null;
+      _summariesFallback = false;
+    });
     _subscribe();
   }
 
@@ -388,6 +500,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(_liveError!),
+                      if (_summariesFallback) ...[
+                        const SizedBox(height: 4),
+                        const Text(
+                          'البيانات المعروضة من جلب لمرة واحدة — '
+                          'اضغط إعادة الاتصال لاستعادة المباشر.',
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       FilledButton(
                         onPressed: _refresh,
@@ -486,8 +605,7 @@ class _DashboardBody extends StatelessWidget {
     final kpis = computeKpis(data.todayRows);
     final alerts = findAlerts(data.todayRows);
     final weekOrders = weekOrdersPerDay(data.weekSummaries, weekKeys);
-    final weekMax =
-        weekOrders.fold<int>(0, (m, v) => v > m ? v : m);
+    final weekMax = weekOrders.fold<int>(0, (m, v) => v > m ? v : m);
     // Week salary due: every visible driver's payoutWeek net summed.
     var weekSalary = 0.0;
     var weekOrdersTotal = 0;
@@ -506,8 +624,7 @@ class _DashboardBody extends StatelessWidget {
       final userWeek = data.weekSummaries.values
           .expand((list) => list)
           .where((s) => s.uid == user.uid);
-      weekOrdersTotal +=
-          userWeek.fold<int>(0, (s, x) => s + x.ordersCount);
+      weekOrdersTotal += userWeek.fold<int>(0, (s, x) => s + x.ordersCount);
       weekKmTotal += userWeek.fold<double>(0, (s, x) => s + x.totalKm);
     }
     const dayLabels = ['أحد', 'إثنين', 'ثلاث', 'أربع', 'خميس', 'جمعة', 'سبت'];
@@ -528,7 +645,9 @@ class _DashboardBody extends StatelessWidget {
               label: 'فريق العمل',
               child: CountUpNumber(
                 value: data.users.length.toDouble(),
-                style: Theme.of(context).textTheme.headlineSmall
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
                     ?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
@@ -539,7 +658,9 @@ class _DashboardBody extends StatelessWidget {
                 children: [
                   CountUpNumber(
                     value: kpis.driversActive.toDouble(),
-                    style: Theme.of(context).textTheme.headlineSmall
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   Text(
@@ -554,7 +675,9 @@ class _DashboardBody extends StatelessWidget {
               label: 'أوردرات اليوم',
               child: CountUpNumber(
                 value: kpis.totalOrders.toDouble(),
-                style: Theme.of(context).textTheme.headlineSmall
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
                     ?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
@@ -566,7 +689,9 @@ class _DashboardBody extends StatelessWidget {
                   CountUpNumber(
                     value: kpis.totalKm,
                     decimals: 1,
-                    style: Theme.of(context).textTheme.headlineSmall
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const Text(' كم'),
@@ -578,7 +703,9 @@ class _DashboardBody extends StatelessWidget {
               label: 'أوردرات الأسبوع',
               child: CountUpNumber(
                 value: weekOrdersTotal.toDouble(),
-                style: Theme.of(context).textTheme.headlineSmall
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
                     ?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
@@ -590,7 +717,9 @@ class _DashboardBody extends StatelessWidget {
                   CountUpNumber(
                     value: weekKmTotal,
                     decimals: 1,
-                    style: Theme.of(context).textTheme.headlineSmall
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const Text(' كم'),
@@ -613,8 +742,7 @@ class _DashboardBody extends StatelessWidget {
                 const SizedBox(height: 4),
                 CountUpNumber(
                   value: weekSalary,
-                  style: Theme.of(context).textTheme.headlineMedium
-                      ?.copyWith(
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: GlassTokens.primaryBlue,
                       ),
@@ -647,9 +775,7 @@ class _DashboardBody extends StatelessWidget {
                     children: [
                       for (var i = 0; i < 7; i++)
                         RisingBar(
-                          fraction: weekMax == 0
-                              ? 0
-                              : weekOrders[i] / weekMax,
+                          fraction: weekMax == 0 ? 0 : weekOrders[i] / weekMax,
                           count: weekOrders[i],
                           delay: Duration(milliseconds: 150 + i * 90),
                           color: i == 6

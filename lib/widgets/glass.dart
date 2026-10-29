@@ -1,18 +1,20 @@
-// Shared look for Delivery Management: the same glass language as
-// DeliveryFlow (soft white cards, rounded corners, blue accent),
-// light theme first, theme-aware throughout.
+// Shared look for Delivery Management: DeliveryFlow's glass language,
+// ported verbatim — translucent white cards (radius 18) over the
+// aurora background, seed blue 0xFF0A84FF, Cairo type via the theme.
+// Light theme first, theme-aware throughout.
 
 import 'package:flutter/material.dart';
 
 class GlassTokens {
-  static const double radius = 20;
+  static const double radius = 18;
   static const double radiusSmall = 14;
   static const EdgeInsets screenPadding = EdgeInsets.all(16);
-  static const Color primaryBlue = Color(0xFF1E6FDB);
+  static const Color primaryBlue = Color(0xFF0A84FF);
   static const Color nearBlack = Color(0xFF0A0A0A);
 }
 
-/// A soft card: white surface, hairline border, gentle shadow.
+/// A soft card: DeliveryFlow's card — translucent white, radius 18,
+/// no border, no shadow (depth comes from the aurora behind it).
 // Never renders the string "null" — callers omit empty fields.
 class GlassCard extends StatelessWidget {
   const GlassCard({
@@ -31,18 +33,8 @@ class GlassCard extends StatelessWidget {
     final card = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+        color: Theme.of(context).cardTheme.color ?? Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(GlassTokens.radius),
-        border: Border.all(
-          color: Theme.of(context).dividerColor.withValues(alpha: 0.4),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: child,
     );
