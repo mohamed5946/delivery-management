@@ -779,6 +779,86 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
                           account.blocked ? s.unblockAction : s.blockAction,
                         ),
                       ),
+                      // Manager-initiated password reset. Drivers
+                      // only: never self (handled by the isSelf
+                      // branch above), never another manager.
+                      // Passwords are NEVER shown: this only sends
+                      // a reset-link email to the driver's email on
+                      // file — the link flow is the whole feature.
+                      if (!account.isManager) ...[
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                          key: const ValueKey('driverPasswordReset'),
+                          onPressed: () async {
+                            if (account.email.trim().isEmpty) {
+                              if (!context.mounted) return;
+                              await showDialog<void>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  content: Text(s.sendResetNoEmail),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: Text(s.ok),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              return;
+                            }
+                            final confirmed = await showConfirmDialog(
+                              context: context,
+                              title: s.sendResetQ,
+                              body: s.sendResetBody(account.displayName),
+                              confirmLabel: s.sendResetAction,
+                              destructive: false,
+                            );
+                            if (!confirmed) return;
+                            try {
+                              await widget.backend.sendDriverPasswordReset(
+                                account.uid,
+                                widget.managerUid,
+                              );
+                              diagnosticsLog.add(
+                                'auth',
+                                'password reset email sent '
+                                '(uid: ${account.uid})',
+                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(s.sendResetSent),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              diagnosticsLog.add(
+                                'auth',
+                                'password reset email failed '
+                                '(uid: ${account.uid}): $e',
+                              );
+                              if (context.mounted) {
+                                await showDialog<void>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: Text(s.sendResetFailedTitle),
+                                    content: Text(
+                                      s.failed(s.localizeError(e)),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx),
+                                        child: Text(s.ok),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          child: Text(s.sendResetAction),
+                        ),
+                      ],
                     ],
                   ],
                 ),

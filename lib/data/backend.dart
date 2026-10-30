@@ -156,6 +156,12 @@ class UnconfiguredBackend implements ManagerBackend {
   }
 
   @override
+  Future<void> sendDriverPasswordReset(
+      String uid, String managerUid) async {
+    throw const BackendNotConfigured();
+  }
+
+  @override
   Future<void> changePassword(
       String currentPassword, String newPassword) async {
     throw const BackendNotConfigured();
@@ -259,6 +265,16 @@ abstract class ManagerBackend {
 
   /// Block / unblock. Never self. Data is always kept.
   Future<void> setBlocked(String uid, bool blocked, String managerUid);
+
+  /// Manager-initiated password reset for a DRIVER: sends a
+  /// reset-link email to the driver's email on file via the Auth
+  /// client SDK. No backend, no rules changes. Never self, never
+  /// another manager (callers + implementations enforce it).
+  /// Throws when the driver has no email on file. Sends nothing
+  /// and reveals nothing about any password: the reset-link flow
+  /// is the entire feature — passwords are never displayed,
+  /// stored, logged, or transmitted by this app.
+  Future<void> sendDriverPasswordReset(String uid, String managerUid);
 
   /// Password change for the signed-in manager. Uses the Auth user's
   /// own email for re-authentication (never a profile field that a
@@ -586,6 +602,30 @@ class FirestoreManagerBackend implements ManagerBackend {
       'blockedAt': blocked ? DateTime.now().millisecondsSinceEpoch : 0,
       'blockedBy': blocked ? managerUid : '',
     });
+  }
+
+  @override
+  @override
+  Future<void> sendDriverPasswordReset(
+      String uid, String managerUid) async {
+    _requireConfigured();
+    if (uid == managerUid) {
+      throw const BackendDenied('لا يمكن إرسال إعادة تعيين لحسابك بنفسك.');
+    }
+    final doc = await _users.doc(uid).get();
+    final data = doc.data();
+    if (data == null) {
+      throw const BackendDenied('لا يوجد ملف حساب لهذا المستخدم.');
+    }
+    final account = ManagerAccount.fromJson(doc.id, data);
+    if (account.isManager) {
+      throw const BackendDenied('إعادة التعيين للسواقين بس — مش للمديرين.');
+    }
+    final email = account.email.trim();
+    if (email.isEmpty) {
+      throw const BackendDenied('مفيش إيميل مسجل للسواق ده.');
+    }
+    await _auth.sendPasswordResetEmail(email: email);
   }
 
   @override
@@ -971,6 +1011,32 @@ class FakeManagerBackend implements ManagerBackend {
     );
     _emitLive();
   }
+
+  @override
+  Future<void> sendDriverPasswordReset(
+      String uid, String managerUid) async {
+    if (uid == managerUid) {
+      throw const BackendDenied('لا يمكن إرسال إعادة تعيين لحسابك بنفسك.');
+    }
+    final target = _accounts[uid];
+    if (target == null) return;
+    if (target.isManager) {
+      throw const BackendDenied('إعادة التعيين للسواقين بس — مش للمديرين.');
+    }
+    if (target.email.trim().isEmpty) {
+      throw const BackendDenied('مفيش إيميل مسجل للسواق ده.');
+    }
+    if (sendResetError != null) throw sendResetError!;
+    resetEmailsSent.add(target.email);
+  }
+
+  /// Test seam: reset-link emails "sent" by [sendDriverPasswordReset]
+  /// (recipient emails, in order). No real email is ever sent, and
+  /// no link or code is ever recorded.
+  final resetEmailsSent = <String>[];
+
+  /// Test seam: when set, [sendDriverPasswordReset] throws this.
+  Object? sendResetError;
 
   @override
   Future<void> changePassword(

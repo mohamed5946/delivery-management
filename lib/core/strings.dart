@@ -271,6 +271,30 @@ class DmStrings {
           'يسجل دخول بداتاه كاملة.'
       : '$name will sign in again with their full data.';
   String get unblockAction => isArabic ? 'فك الحظر' : 'Unblock';
+  String get ok => isArabic ? 'تمام' : 'OK';
+  String get sendResetAction =>
+      isArabic ? 'إرسال إعادة تعيين كلمة السر' : 'Send password reset';
+  String get sendResetQ =>
+      isArabic ? 'إرسال إعادة تعيين كلمة السر؟' : 'Send password reset?';
+  String sendResetBody(String name) => isArabic
+      ? 'هيتبعت إيميل فيه رابط إعادة تعيين كلمة السر '
+          'للإيميل المسجل عند $name. لازم يفتح أحدث '
+          'إيميل ويستخدم الرابط فورًا — الروابط بتنتهي، '
+          'وكل طلب جديد بيلغي الروابط اللي قبله.'
+      : 'A password reset link will be emailed to the address '
+          'on file for $name. They must open the NEWEST email '
+          'and use the link immediately — links expire, and '
+          'each new request invalidates older links.';
+  String get sendResetNoEmail => isArabic
+      ? 'مفيش إيميل مسجل للسواق ده — مفيش عنوان يتبعت له '
+          'رابط إعادة تعيين.'
+      : 'No email is on file for this driver — there is no '
+          'address to send a reset link to.';
+  String get sendResetSent => isArabic
+      ? 'اتبعَت إيميل إعادة تعيين كلمة السر للسواق.'
+      : 'Password reset email sent to the driver.';
+  String get sendResetFailedTitle =>
+      isArabic ? 'فشل إرسال إعادة التعيين' : 'Reset send failed';
   String get todayOrdersTitle => isArabic ? 'أوردرات اليوم' : "Today's orders";
   String get noOrderHistory => isArabic
       ? 'مفيش سجل أوردرات لليوم ده.'
