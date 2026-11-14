@@ -74,6 +74,9 @@ class ManagerAccount {
     this.payoutMethod = PayoutMethod.none,
     this.payoutNumber = '',
     this.payoutName = '',
+    this.lastLat,
+    this.lastLng,
+    this.lastLocationAtMillis,
   });
 
   final String uid;
@@ -89,8 +92,59 @@ class ManagerAccount {
   final String payoutNumber;
   final String payoutName;
 
+  /// Last known driver location, written by DeliveryFlow as
+  /// users/{uid} fields `lastLat` / `lastLng` /
+  /// `lastLocationAtMillis`. DeliveryFlow writes NO locations today,
+  /// so all three are null for every driver in the field until a
+  /// future driver-app update starts writing them — a null here
+  /// means "no location yet", never a guessed position.
+  final double? lastLat;
+  final double? lastLng;
+  final int? lastLocationAtMillis;
+
   bool get isManager => role == ManagerRole.manager;
   String get displayName => username.isEmpty ? email : username;
+
+  /// True when the profile carries a usable last-known location.
+  /// `0,0` (the geo-intent placeholder) is not a location.
+  bool get hasLocation =>
+      lastLat != null &&
+      lastLng != null &&
+      !(lastLat == 0 && lastLng == 0) &&
+      lastLat! >= -90 &&
+      lastLat! <= 90 &&
+      lastLng! >= -180 &&
+      lastLng! <= 180;
+
+  ManagerAccount copyWith({
+    ManagerRole? role,
+    bool? blocked,
+    int? blockedAt,
+    String? blockedBy,
+    bool? mustChangePassword,
+    double? lastLat,
+    double? lastLng,
+    int? lastLocationAtMillis,
+  }) {
+    return ManagerAccount(
+      uid: uid,
+      email: email,
+      username: username,
+      role: role ?? this.role,
+      phone: phone,
+      mustChangePassword: mustChangePassword ?? this.mustChangePassword,
+      blocked: blocked ?? this.blocked,
+      blockedAt: blockedAt ?? this.blockedAt,
+      blockedBy: blockedBy ?? this.blockedBy,
+      payoutMethod: payoutMethod,
+      payoutNumber: payoutNumber,
+      payoutName: payoutName,
+      lastLat: lastLat ?? this.lastLat,
+      lastLng: lastLng ?? this.lastLng,
+      lastLocationAtMillis:
+          lastLocationAtMillis ?? this.lastLocationAtMillis,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'email': email,
@@ -104,6 +158,10 @@ class ManagerAccount {
         'payoutMethod': payoutMethod.name,
         'payoutNumber': payoutNumber,
         'payoutName': payoutName,
+        if (lastLat != null) 'lastLat': lastLat,
+        if (lastLng != null) 'lastLng': lastLng,
+        if (lastLocationAtMillis != null)
+          'lastLocationAtMillis': lastLocationAtMillis,
       };
 
   factory ManagerAccount.fromJson(String uid, Map<String, dynamic> json) {
@@ -120,6 +178,10 @@ class ManagerAccount {
       payoutMethod: payoutMethodFromString(json['payoutMethod'] as String?),
       payoutNumber: (json['payoutNumber'] as String?) ?? '',
       payoutName: (json['payoutName'] as String?) ?? '',
+      lastLat: (json['lastLat'] as num?)?.toDouble(),
+      lastLng: (json['lastLng'] as num?)?.toDouble(),
+      lastLocationAtMillis:
+          (json['lastLocationAtMillis'] as num?)?.toInt(),
     );
   }
 }

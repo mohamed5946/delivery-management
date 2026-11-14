@@ -1,6 +1,6 @@
 // Widget tests for Delivery Management, driven through the real
 // UI against a seeded FakeManagerBackend:
-//   * manager login (username + phone) reaches the 4-tab shell
+//   * manager login (username + phone) reaches the 5-tab shell
 //   * driver login is refused, blocked login is refused
 //   * payroll row and detail nets agree
 //   * Application → فريق العمل → driver detail → order detail
@@ -182,7 +182,7 @@ Future<void> loginAs(
 }
 
 void main() {
-  testWidgets('manager login by username reaches the 4-tab shell',
+  testWidgets('manager login by username reaches the 5-tab shell',
       (tester) async {
     await pumpApp(tester, seededBackend());
     await loginAs(tester, identifier: 'admin', password: 'manager123');
@@ -190,6 +190,7 @@ void main() {
     expect(find.text('الأجور الأسبوعية'), findsOneWidget);
     expect(find.text('Application'), findsOneWidget);
     expect(find.text('محظور'), findsOneWidget);
+    expect(find.text('الخريطة'), findsOneWidget);
   });
 
   testWidgets('manager login by phone reaches the shell', (tester) async {

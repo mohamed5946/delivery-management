@@ -27,7 +27,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
+import '../../core/destination.dart';
 import '../../core/diagnostics.dart';
 import '../../core/strings.dart';
 import '../../core/week_utils.dart';
@@ -35,6 +38,7 @@ import '../../data/backend.dart';
 import '../../data/models.dart';
 import '../../widgets/confirm.dart';
 import '../../theme/dm_theme.dart';
+import '../../widgets/dm_map.dart';
 import '../../widgets/glass.dart';
 import '../../widgets/shimmer_skeleton.dart';
 
@@ -651,6 +655,7 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
               else
                 _OrdersSection(
                   record: _record,
+                  dayOrderPrice: summary?.orderPrice ?? 0,
                   onOrderSaved: (updated) async {
                     final record = _record;
                     if (record == null) return;
@@ -874,10 +879,18 @@ class _DriverDetailScreenState extends State<DriverDetailScreen> {
 /// The day's orders. Full entries when the driver app uploads them;
 /// an honest count-only state until then (never invented orders).
 class _OrdersSection extends StatelessWidget {
-  const _OrdersSection({required this.record, required this.onOrderSaved});
+  const _OrdersSection({
+    required this.record,
+    required this.onOrderSaved,
+    required this.dayOrderPrice,
+  });
 
   final DayOrderRecord? record;
   final Future<void> Function(OrderEntry updated) onOrderSaved;
+
+  /// That day's per-order price (from the day summary) — the order
+  /// amount is this price + the order's manual bonus.
+  final double dayOrderPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -918,6 +931,7 @@ class _OrdersSection extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) => OrderDetailScreen(
                           order: order,
+                          dayOrderPrice: dayOrderPrice,
                           onSaved: onOrderSaved,
                         ),
                       ),
@@ -1346,17 +1360,26 @@ class _EditDayDialogState extends State<_EditDayDialog> {
 /// order number, status, address (notes), phone, km legs (manual +
 /// GPS + effective, with يدوي badges), durations, lifecycle times,
 /// manual bonus, count-only flag, creation/completion instants,
-/// and recorded route point counts. No map in v1 (data fields are
-/// all present; the map view is a later addition). Manager edit
-/// covers notes / phone / km / bonus and rewrites the day record.
+/// and recorded route point counts. v1.0.5 adds the parsed
+/// destination (address + coordinates + a small destination map —
+/// coordinates are the exact navigation target, the written address
+/// is notes-only, never geocoded) and the order amount (that day's
+/// order price + manual bonus). The customer is identified by phone
+/// number ONLY — there is no customer name anywhere, and none is
+/// ever invented. Manager edit covers notes / phone / km / bonus
+/// and rewrites the day record.
 class OrderDetailScreen extends StatefulWidget {
   const OrderDetailScreen({
     super.key,
     required this.order,
+    this.dayOrderPrice = 0,
     required this.onSaved,
   });
 
   final OrderEntry order;
+
+  /// That day's per-order price (from the day summary).
+  final double dayOrderPrice;
   final Future<void> Function(OrderEntry updated) onSaved;
 
   @override
@@ -1365,11 +1388,20 @@ class OrderDetailScreen extends StatefulWidget {
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late OrderEntry _order;
+  late ParsedDestination _destination;
 
   @override
   void initState() {
     super.initState();
     _order = widget.order;
+    _destination = parseDestination(_order.notes);
+    if (_order.notes.trim().isNotEmpty && !_destination.hasCoords) {
+      diagnosticsLog.add(
+        'map',
+        'order destination: no coordinates parsed from notes '
+        '(order ${_order.id})',
+      );
+    }
   }
 
   Future<void> _edit() async {
@@ -1510,7 +1542,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
     try {
       await widget.onSaved(updated);
-      if (mounted) setState(() => _order = updated);
+      if (mounted) {
+        setState(() {
+          _order = updated;
+          _destination = parseDestination(updated.notes);
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1575,6 +1612,63 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     label: s.dayField,
                     value: o.dateKey,
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            GlassCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    s.destinationTitle,
+                    style: Theme.of(context).textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  if (_destination.address.isNotEmpty)
+                    InfoRow(
+                      icon: Icons.location_on_rounded,
+                      label: s.destinationAddressLabel,
+                      value: _destination.address,
+                    ),
+                  if (_destination.hasCoords) ...[
+                    InfoRow(
+                      icon: Icons.gps_fixed_rounded,
+                      label: s.destinationCoordsLabel,
+                      value: _destination.coordsLabel,
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: SizedBox(
+                        height: 180,
+                        child: DmMapView(
+                          center: LatLng(
+                            _destination.lat!,
+                            _destination.lng!,
+                          ),
+                          zoom: 15,
+                          interactive: false,
+                          markers: [
+                            Marker(
+                              point: LatLng(
+                                _destination.lat!,
+                                _destination.lng!,
+                              ),
+                              width: 40,
+                              height: 40,
+                              child: const DmDestinationPin(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ] else
+                    Text(
+                      s.noDestinationCoords,
+                      style: const TextStyle(fontSize: 13),
+                    ),
                 ],
               ),
             ),
@@ -1651,6 +1745,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(s.manualBonusLine(egp(o.manualBonusEgp, s))),
+                  Text(
+                    s.orderAmountLine(
+                      egp(widget.dayOrderPrice + o.manualBonusEgp, s),
+                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  Text(
+                    s.orderAmountHint,
+                    style: const TextStyle(fontSize: 13),
+                  ),
                   Text(s.countOnlyYes(o.countOnly)),
                   Text(
                     s.createdUpdatedLine(

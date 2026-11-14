@@ -208,6 +208,39 @@ class DmStrings {
           'بره الأسبوع.'
       : 'Counted in the total, but made on a day outside this week.';
 
+  // ---- drivers map ----
+  String get mapTitle => isArabic ? 'الخريطة' : 'Map';
+  String get driversMapTitle => isArabic ? 'خريطة السواقين' : 'Drivers map';
+  String get noLocationYet => isArabic ? 'مفيش موقع لسه' : 'No location yet';
+  String get noDriversRegistered =>
+      isArabic ? 'مفيش سواقين مسجلين.' : 'No drivers registered.';
+  String get noDriverLocationsNote => isArabic
+      ? 'لسه مفيش موقع لأي سواق — تطبيق السواق مش بيرفع موقعه '
+          'للسحابة لحد دلوقتي. أول ما التحديث ده ينزل، السواقين '
+          'هيظهروا هنا على الخريطة بمواقعهم الحقيقية.'
+      : 'No driver has a location yet — the driver app does not '
+          'upload locations to the cloud for now. Once that update '
+          'lands, drivers will show here on the map with their '
+          'real locations.';
+  String driverLocationLine(String lat, String lng, String time) =>
+      isArabic
+          ? 'آخر موقع: $lat، $lng • $time'
+          : 'Last location: $lat, $lng • $time';
+  String get destinationTitle => isArabic ? 'وجهة الأوردر' : 'Order destination';
+  String get destinationAddressLabel => isArabic ? 'العنوان' : 'Address';
+  String get destinationCoordsLabel =>
+      isArabic ? 'الإحداثيات (وجهة الملاحة)' : 'Coordinates (navigation target)';
+  String get noDestinationCoords => isArabic
+      ? 'مفيش إحداثيات في العنوان — الإحداثيات هي اللي بتحدد '
+          'الوجهة بالظبط، والعنوان المكتوب ملاحظة بس.'
+      : 'No coordinates in the address — coordinates are what pin '
+          'the destination exactly; the written address is notes only.';
+  String orderAmountLine(String money) =>
+      isArabic ? 'قيمة الأوردر: $money' : 'Order amount: $money';
+  String get orderAmountHint => isArabic
+      ? 'سعر الأوردر في اليوم ده + البونص اليدوي.'
+      : "That day's order price + manual bonus.";
+
   // ---- team ----
   String get teamTitle => isArabic ? 'فريق العمل' : 'Team';
   String daySummaryLine(int orders, String km, String money) => isArabic
@@ -338,8 +371,10 @@ class DmStrings {
   String get kmOutField => isArabic ? 'كم الذهاب' : 'Km out';
   String get kmBackField => isArabic ? 'كم العودة' : 'Km back';
   String get routePointsNote => isArabic
-      ? 'ملحوظة: الخريطة نفسها مش موجودة في نسخة المدير الأولى — كل حقول البيانات موجودة هنا.'
-      : 'Note: the map itself is not in this first manager version — all data fields are shown here.';
+      ? 'ملحوظة: خط المسار نفسه مش مرسوم — النقط أرقام بس، وخريطة '
+          'وجهة الأوردر فوق.'
+      : 'Note: the route line itself is not drawn — points are counts '
+          'only, and the order destination map is above.';
   String get fullOrderNumber => isArabic ? 'رقم الأوردر الكامل' : 'Full order number';
   String orderTitle(String shortId) => isArabic ? 'أوردر #$shortId' : 'Order #$shortId';
   String get dayField => isArabic ? 'اليوم' : 'Day';
@@ -372,11 +407,6 @@ class DmStrings {
   String routePointsLine(int route, int road) => isArabic
       ? 'نقاط المسار المسجلة: $route • نقاط الطريق: $road'
       : 'Recorded route points: $route • Road points: $road';
-  String get noMapNote => isArabic
-      ? 'ملحوظة: الخريطة نفسها مش موجودة في نسخة '
-          'المدير الأولى — كل حقول البيانات موجودة هنا.'
-      : 'Note: the map itself is not in the first manager '
-          'version — every data field is here.';
   String completedOrdersLine(int n, String km) => isArabic
       ? '$n أوردر مكتمل • $km كم'
       : '$n completed orders • $km km';

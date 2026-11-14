@@ -967,20 +967,7 @@ class FakeManagerBackend implements ManagerBackend {
     }
     final old = _accounts[uid];
     if (old == null) return;
-    _accounts[uid] = ManagerAccount(
-      uid: old.uid,
-      email: old.email,
-      username: old.username,
-      role: role,
-      phone: old.phone,
-      mustChangePassword: old.mustChangePassword,
-      blocked: old.blocked,
-      blockedAt: old.blockedAt,
-      blockedBy: old.blockedBy,
-      payoutMethod: old.payoutMethod,
-      payoutNumber: old.payoutNumber,
-      payoutName: old.payoutName,
-    );
+    _accounts[uid] = old.copyWith(role: role);
     _emitLive();
   }
 
@@ -995,19 +982,10 @@ class FakeManagerBackend implements ManagerBackend {
     }
     final old = _accounts[uid];
     if (old == null) return;
-    _accounts[uid] = ManagerAccount(
-      uid: old.uid,
-      email: old.email,
-      username: old.username,
-      role: old.role,
-      phone: old.phone,
-      mustChangePassword: old.mustChangePassword,
+    _accounts[uid] = old.copyWith(
       blocked: blocked,
       blockedAt: blocked ? DateTime.now().millisecondsSinceEpoch : 0,
       blockedBy: blocked ? managerUid : '',
-      payoutMethod: old.payoutMethod,
-      payoutNumber: old.payoutNumber,
-      payoutName: old.payoutName,
     );
     _emitLive();
   }
@@ -1049,20 +1027,7 @@ class FakeManagerBackend implements ManagerBackend {
     }
     _passwordsByEmail[me.email] = newPassword;
     if (me.mustChangePassword) {
-      _accounts[me.uid] = ManagerAccount(
-        uid: me.uid,
-        email: me.email,
-        username: me.username,
-        role: me.role,
-        phone: me.phone,
-        mustChangePassword: false,
-        blocked: me.blocked,
-        blockedAt: me.blockedAt,
-        blockedBy: me.blockedBy,
-        payoutMethod: me.payoutMethod,
-        payoutNumber: me.payoutNumber,
-        payoutName: me.payoutName,
-      );
+      _accounts[me.uid] = me.copyWith(mustChangePassword: false);
     }
     _emitLive();
   }

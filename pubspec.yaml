@@ -1,7 +1,7 @@
 name: deliverymanagement
 description: Delivery Management - manager-only companion app for DeliveryFlow. Reads and writes the same Firebase project and Firestore data as DeliveryFlow; managers only.
 publish_to: 'none'
-version: 1.0.4+5
+version: 1.0.5+6
 
 environment:
   sdk: ^3.6.0
@@ -20,6 +20,8 @@ dependencies:
   url_launcher: ^6.3.1
   package_info_plus: ^10.2.2
   shared_preferences: ^2.2.3
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.1
 
 dev_dependencies:
   flutter_test:

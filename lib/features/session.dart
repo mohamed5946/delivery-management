@@ -10,7 +10,7 @@
 //                        change-password form serves unflagged
 //                        managers)
 //   not a manager      → signed out + "managers only" message
-//   manager            → the 4-tab shell
+//   manager            → the 5-tab shell
 // Sign-out is always explicit + confirmed (Application tab).
 // There is NO sign-up screen and NO invite gate in v1: accounts
 // are created in DeliveryFlow and promoted to manager there.

@@ -1,4 +1,4 @@
-// The 4-tab shell (manager-only — the session gate runs before
+// The 5-tab shell (manager-only — the session gate runs before
 // this screen ever appears).
 //
 // Tabs (bottom bar, in order):
@@ -6,6 +6,7 @@
 //   2. الأجور الأسبوعية     — weekly payroll
 //   3. Application          — the manager's OWN account area
 //   4. Block                — blocked users
+//   5. الخريطة              — drivers map (v1.0.5)
 // The team lives in the Application tab as a prominent "فريق العمل"
 // entry opening its own standalone screen — never mixed into the
 // payroll tab.
@@ -18,6 +19,7 @@ import '../theme/dm_theme.dart';
 import 'application/application_screen.dart';
 import 'block/block_screen.dart';
 import 'dashboard/dashboard_screen.dart';
+import 'map/drivers_map_screen.dart';
 import 'payroll/payroll_screen.dart';
 import 'session.dart';
 import 'settings.dart';
@@ -48,8 +50,14 @@ class _ManagerShellState extends State<ManagerShell> {
   /// play once and never again).
   var _dashboardGeneration = 0;
 
+  /// Same replay rule as the dashboard: bumps every time the map
+  /// tab becomes selected after being inactive, so the staggered
+  /// driver list replays on EVERY map entry.
+  var _mapGeneration = 0;
+
   void _selectTab(int i) {
     if (i == 0 && _index != 0) _dashboardGeneration++;
+    if (i == 4 && _index != 4) _mapGeneration++;
     setState(() => _index = i);
   }
 
@@ -80,6 +88,12 @@ class _ManagerShellState extends State<ManagerShell> {
         backend: widget.backend,
         managerUid: account.uid,
       ),
+      DriversMapScreen(
+        key: const ValueKey('tabDriversMap'),
+        backend: widget.backend,
+        managerUid: account.uid,
+        entryGeneration: _mapGeneration,
+      ),
     ];
     // DeliveryFlow's shell pattern: the floating glass nav bar is an
     // overlay above the content (not in the bottomNavigationBar
@@ -107,12 +121,14 @@ class _ManagerShellState extends State<ManagerShell> {
                 Icons.payments_rounded,
                 Icons.apps_rounded,
                 Icons.block_rounded,
+                Icons.map_rounded,
               ],
               labels: [
                 s.dashboardTitle,
                 s.payrollTitle,
                 'Application',
                 s.blockTitle,
+                s.mapTitle,
               ],
             ),
           ),
